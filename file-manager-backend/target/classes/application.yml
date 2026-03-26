@@ -3,9 +3,9 @@ spring:
     name: file-manager-backend
   
   datasource:
-    url: jdbc:mysql://localhost:3306/file_manager?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+    url: jdbc:mysql://localhost:18887/file_manager?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&createDatabaseIfNotExist=true
     username: root
-    password: root
+    password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
   
   jpa:
@@ -27,4 +27,4 @@ server:
 
 app:
   encryption:
-    key: file-manager-secret-key-2026
+    key: filemanager12345
