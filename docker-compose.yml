@@ -23,7 +23,7 @@ services:
     build: ./file-manager-backend
     container_name: file_manager_backend
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/file_manager?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/file_manager?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-filemanager12345}
@@ -42,7 +42,7 @@ services:
     build: ./file-manager-frontend
     container_name: file_manager_frontend
     ports:
-      - "80:80"
+      - "16666:80"
     depends_on:
       - backend
     networks:
