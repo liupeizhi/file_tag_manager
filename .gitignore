@@ -1,3 +1,25 @@
+# Environment
 .env
 .env.local
 .env.*.local
+
+# Backend
+file-manager-backend/target/
+file-manager-backend/.factorypath
+
+# Frontend
+file-manager-frontend/node_modules/
+file-manager-frontend/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Memory/Context
+MEMORY/
+.claude-context.md
