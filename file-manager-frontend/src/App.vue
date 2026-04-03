@@ -1,12 +1,11 @@
 <template>
   <el-config-provider :locale="zhCn">
-    <Home />
+    <router-view />
   </el-config-provider>
 </template>
 
 <script setup>
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
-import Home from './views/Home.vue'
 </script>
 
 <style>

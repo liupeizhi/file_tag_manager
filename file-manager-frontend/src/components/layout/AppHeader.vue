@@ -1,11 +1,22 @@
 <template>
-  <div class="app-header">
+  <div class="app-header glass-strong">
     <div class="logo">
-      <el-icon size="24"><FolderOpened /></el-icon>
+      <el-icon size="24" :color="`var(--theme-primary)`"><FolderOpened /></el-icon>
       <span>文件标签浏览器</span>
     </div>
     
     <div class="server-select">
+      <ThemeSwitcher />
+      
+      <div 
+        v-if="serverStore.currentServer" 
+        class="current-server"
+        :title="serverStore.currentServer.url"
+      >
+        <el-icon><Monitor /></el-icon>
+        <span>{{ serverStore.currentServer.name }}</span>
+      </div>
+      
       <el-select
         v-model="serverStore.currentServer"
         placeholder="选择服务器"
@@ -19,26 +30,34 @@
         />
       </el-select>
       
-      <el-button type="primary" @click="showServerDialog = true">
-        <el-icon><Plus /></el-icon>
-        添加服务器
+      <el-button class="glass-button" @click="goAdmin">
+        <el-icon><Setting /></el-icon>
+        管理后台
       </el-button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
-import ServerDialog from '@/components/server/ServerDialog.vue'
+import { Monitor, Setting, FolderOpened } from '@element-plus/icons-vue'
+import ThemeSwitcher from '@/components/common/ThemeSwitcher.vue'
 
+const router = useRouter()
 const serverStore = useServerStore()
 const fileStore = useFileStore()
-const showServerDialog = ref(false)
 
-onMounted(() => {
-  serverStore.loadServers()
+onMounted(async () => {
+  await serverStore.loadServers()
+  
+  if (serverStore.currentServer) {
+    fileStore.setPath('/')
+    await fileStore.loadTree(serverStore.currentServer.id, '/')
+    await fileStore.loadFileList(serverStore.currentServer.id, '/')
+  }
 })
 
 function handleServerChange(server) {
@@ -49,6 +68,10 @@ function handleServerChange(server) {
     fileStore.loadFileList(server.id, '/')
   }
 }
+
+function goAdmin() {
+  router.push('/admin/servers')
+}
 </script>
 
 <style scoped>
@@ -58,8 +81,8 @@ function handleServerChange(server) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
+  background: var(--theme-surface);
+  border-bottom: 1px solid var(--theme-border);
 }
 
 .logo {
@@ -68,11 +91,33 @@ function handleServerChange(server) {
   gap: 10px;
   font-size: 18px;
   font-weight: 600;
+  color: var(--theme-text);
 }
 
 .server-select {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.current-server {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent);
+  border-radius: 8px;
+  color: var(--theme-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: help;
+  transition: all var(--transition-fast);
+}
+
+.current-server:hover {
+  background: color-mix(in srgb, var(--theme-primary) 15%, transparent);
+  border-color: var(--theme-primary);
+  transform: translateY(-1px);
 }
 </style>

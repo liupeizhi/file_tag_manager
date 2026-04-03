@@ -12,8 +12,9 @@ import java.util.Optional;
 @Repository
 public interface FileMetadataRepository extends JpaRepository<FileMetadata, Long>, 
                                                 JpaSpecificationExecutor<FileMetadata> {
-    List<FileMetadata> findByServerIdAndPath(Long serverId, String path);
     Optional<FileMetadata> findByServerIdAndPathAndName(Long serverId, String path, String name);
+    Optional<FileMetadata> findByServerIdAndPath(Long serverId, String path);
     void deleteByServerId(Long serverId);
     Page<FileMetadata> findByServerIdAndIsDirectoryFalse(Long serverId, Pageable pageable);
+    List<FileMetadata> findByServerId(Long serverId);
 }

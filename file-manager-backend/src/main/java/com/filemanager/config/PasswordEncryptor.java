@@ -28,6 +28,10 @@ public class PasswordEncryptor {
     }
     
     public String decrypt(String encrypted) {
+        if (encrypted == null || encrypted.isEmpty()) {
+            return null;
+        }
+        
         try {
             SecretKeySpec key = new SecretKeySpec(encryptionKey.getBytes(StandardCharsets.UTF_8), ALGORITHM);
             Cipher cipher = Cipher.getInstance(ALGORITHM);
@@ -35,7 +39,7 @@ public class PasswordEncryptor {
             byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode(encrypted));
             return new String(decrypted, StandardCharsets.UTF_8);
         } catch (Exception e) {
-            throw new RuntimeException("密码解密失败", e);
+            return encrypted;
         }
     }
 }

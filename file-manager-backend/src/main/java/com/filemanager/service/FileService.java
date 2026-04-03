@@ -3,8 +3,10 @@ package com.filemanager.service;
 import com.filemanager.config.PasswordEncryptor;
 import com.filemanager.dto.FileDTO;
 import com.filemanager.entity.FileMetadata;
+import com.filemanager.entity.FileTagRelation;
 import com.filemanager.entity.ServerConfig;
 import com.filemanager.repository.FileMetadataRepository;
+import com.filemanager.repository.FileTagRelationRepository;
 import com.filemanager.repository.ServerConfigRepository;
 import com.github.sardine.DavResource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,8 +21,11 @@ import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,6 +36,9 @@ public class FileService {
     
     @Autowired
     private FileMetadataRepository fileMetadataRepository;
+    
+    @Autowired
+    private FileTagRelationRepository fileTagRelationRepository;
     
     @Autowired
     private WebDavService webDavService;
@@ -73,55 +81,199 @@ public class FileService {
                                       String startDate, String endDate,
                                       String sortBy, String sortOrder,
                                       int page, int size) {
-        Specification<FileMetadata> spec = Specification.where(null);
-        
-        if (serverId != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("serverId"), serverId));
+        if (serverId == null) {
+            return Page.empty();
         }
         
-        if (path != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("path"), path));
-        }
+        ServerConfig server = getServer(serverId);
+        List<DavResource> resources = webDavService.listFiles(server, path != null ? path : "/");
+        
+        List<FileDTO> allFiles = resources.stream()
+                .filter(r -> !r.getPath().equals(path))
+                .map(r -> toDTO(r, serverId))
+                .collect(Collectors.toList());
         
         if (name != null && !name.isEmpty()) {
-            spec = spec.and((root, query, cb) -> cb.like(root.get("name"), "%" + name + "%"));
+            allFiles = allFiles.stream()
+                    .filter(f -> f.getName() != null && f.getName().toLowerCase().contains(name.toLowerCase()))
+                    .collect(Collectors.toList());
         }
         
         if (type != null && !type.isEmpty()) {
-            spec = spec.and((root, query, cb) -> cb.like(root.get("contentType"), type + "%"));
+            allFiles = allFiles.stream()
+                    .filter(f -> f.getFileType() != null && f.getFileType().equalsIgnoreCase(type))
+                    .collect(Collectors.toList());
         }
         
-        Sort sort = Sort.by("asc".equalsIgnoreCase(sortOrder) ? Sort.Direction.ASC : Sort.Direction.DESC,
-                            sortBy != null ? sortBy : "name");
-        Pageable pageable = PageRequest.of(page, size, sort);
+        allFiles.sort((a, b) -> {
+            if ("desc".equalsIgnoreCase(sortOrder)) {
+                return compareFiles(b, a, sortBy);
+            }
+            return compareFiles(a, b, sortBy);
+        });
         
-        return fileMetadataRepository.findAll(spec, pageable)
-                .map(this::toDTO);
+        int total = allFiles.size();
+        int fromIndex = page * size;
+        int toIndex = Math.min(fromIndex + size, total);
+        
+        List<FileDTO> pageContent = fromIndex < total ? 
+                allFiles.subList(fromIndex, toIndex) : List.of();
+        
+        return new org.springframework.data.domain.PageImpl<>(
+                pageContent, 
+                PageRequest.of(page, size), 
+                total);
+    }
+    
+    private int compareFiles(FileDTO a, FileDTO b, String sortBy) {
+        if (sortBy == null) sortBy = "name";
+        
+        switch (sortBy) {
+            case "name":
+                return String.CASE_INSENSITIVE_ORDER.compare(
+                        a.getName() != null ? a.getName() : "",
+                        b.getName() != null ? b.getName() : "");
+            case "size":
+                return Long.compare(a.getSize() != null ? a.getSize() : 0, 
+                                   b.getSize() != null ? b.getSize() : 0);
+            case "lastModified":
+                if (a.getLastModified() == null && b.getLastModified() == null) return 0;
+                if (a.getLastModified() == null) return -1;
+                if (b.getLastModified() == null) return 1;
+                return a.getLastModified().compareTo(b.getLastModified());
+            default:
+                return 0;
+        }
     }
     
     @Transactional
-    public void syncFiles(Long serverId, String path) {
+    public Map<String, Integer> syncFiles(Long serverId, String path) {
         ServerConfig server = getServer(serverId);
-        List<DavResource> resources = webDavService.listFiles(server, path);
         
-        for (DavResource resource : resources) {
-            if (resource.getPath().equals(path)) continue;
+        Map<String, Integer> result = new HashMap<>();
+        result.put("added", 0);
+        result.put("updated", 0);
+        result.put("deleted", 0);
+        
+        Map<String, DavResource> webdavResources = new HashMap<>();
+        collectWebDavResources(server, path, webdavResources);
+        
+        String pathPrefix = path.equals("/") ? "/" : path;
+        List<FileMetadata> existingMetadata = fileMetadataRepository.findByServerId(serverId).stream()
+                .filter(m -> m.getPath().startsWith(pathPrefix) || path.equals("/"))
+                .collect(Collectors.toList());
+        
+        Map<String, FileMetadata> existingMap = existingMetadata.stream()
+                .collect(Collectors.toMap(FileMetadata::getPath, m -> m));
+        
+        for (FileMetadata metadata : existingMetadata) {
+            if (!webdavResources.containsKey(metadata.getPath())) {
+                fileTagRelationRepository.deleteByFileId(metadata.getId());
+                fileTagRelationRepository.deleteByFilePathStartingWithAndServerId(metadata.getPath() + "/", serverId);
+                fileMetadataRepository.delete(metadata);
+                result.put("deleted", result.get("deleted") + 1);
+            }
+        }
+        
+        for (Map.Entry<String, DavResource> entry : webdavResources.entrySet()) {
+            String webdavPath = entry.getKey();
+            DavResource resource = entry.getValue();
             
+            if (existingMap.containsKey(webdavPath)) {
+                FileMetadata metadata = existingMap.get(webdavPath);
+                updateMetadataFromResource(metadata, resource);
+                fileMetadataRepository.save(metadata);
+                result.put("updated", result.get("updated") + 1);
+            } else {
+                FileMetadata metadata = createMetadataFromResource(serverId, resource);
+                fileMetadataRepository.save(metadata);
+                result.put("added", result.get("added") + 1);
+            }
+        }
+        
+        return result;
+    }
+    
+    private void collectWebDavResources(ServerConfig server, String path, Map<String, DavResource> allResources) {
+        try {
+            List<DavResource> resources = webDavService.listFiles(server, path);
+            for (DavResource resource : resources) {
+                if (!resource.getPath().equals(path)) {
+                    allResources.put(resource.getPath(), resource);
+                    if (resource.isDirectory()) {
+                        collectWebDavResources(server, resource.getPath(), allResources);
+                    }
+                }
+            }
+        } catch (Exception e) {
+        }
+    }
+    
+    private void updateMetadataFromResource(FileMetadata metadata, DavResource resource) {
+        metadata.setName(resource.getName());
+        metadata.setIsDirectory(resource.isDirectory());
+        metadata.setSize(resource.getContentLength());
+        metadata.setContentType(resource.getContentType());
+        if (resource.getModified() != null) {
+            metadata.setLastModified(LocalDateTime.ofInstant(
+                    resource.getModified().toInstant(), ZoneId.systemDefault()));
+        }
+    }
+    
+    private FileMetadata createMetadataFromResource(Long serverId, DavResource resource) {
+        FileMetadata metadata = new FileMetadata();
+        metadata.setServerId(serverId);
+        metadata.setPath(resource.getPath());
+        metadata.setName(resource.getName());
+        metadata.setIsDirectory(resource.isDirectory());
+        metadata.setSize(resource.getContentLength());
+        metadata.setContentType(resource.getContentType());
+        if (resource.getModified() != null) {
+            metadata.setLastModified(LocalDateTime.ofInstant(
+                    resource.getModified().toInstant(), ZoneId.systemDefault()));
+        }
+        return metadata;
+    }
+    
+    public FileMetadata getOrCreateMetadata(Long serverId, String path) {
+        Optional<FileMetadata> existing = fileMetadataRepository.findByServerIdAndPath(serverId, path);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        
+        ServerConfig server = getServer(serverId);
+        DavResource resource = webDavService.getFileInfo(server, path);
+        
+        if (resource == null) {
             FileMetadata metadata = new FileMetadata();
             metadata.setServerId(serverId);
-            metadata.setPath(resource.getPath());
-            metadata.setName(resource.getName());
-            metadata.setIsDirectory(resource.isDirectory());
-            metadata.setSize(resource.getContentLength());
-            metadata.setContentType(resource.getContentType());
-            
-            if (resource.getModified() != null) {
-                metadata.setLastModified(LocalDateTime.ofInstant(
-                        resource.getModified().toInstant(), ZoneId.systemDefault()));
-            }
-            
-            fileMetadataRepository.save(metadata);
+            metadata.setPath(path);
+            metadata.setName(getFileNameFromPath(path));
+            metadata.setIsDirectory(false);
+            return fileMetadataRepository.save(metadata);
         }
+        
+        FileMetadata metadata = new FileMetadata();
+        metadata.setServerId(serverId);
+        metadata.setPath(path);
+        metadata.setName(resource.getName());
+        metadata.setIsDirectory(resource.isDirectory());
+        metadata.setSize(resource.getContentLength());
+        metadata.setContentType(resource.getContentType());
+        
+        if (resource.getModified() != null) {
+            metadata.setLastModified(LocalDateTime.ofInstant(
+                    resource.getModified().toInstant(), ZoneId.systemDefault()));
+        }
+        
+        return fileMetadataRepository.save(metadata);
+    }
+    
+    private String getFileNameFromPath(String path) {
+        if (path == null || path.isEmpty()) return "";
+        String normalized = path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+        int lastSlash = normalized.lastIndexOf('/');
+        return lastSlash >= 0 ? normalized.substring(lastSlash + 1) : normalized;
     }
     
     @Transactional
@@ -159,7 +311,10 @@ public class FileService {
                 .orElseThrow(() -> new RuntimeException("服务器不存在"));
         
         if (server.getPassword() != null) {
-            server.setPassword(passwordEncryptor.decrypt(server.getPassword()));
+            String decrypted = passwordEncryptor.decrypt(server.getPassword());
+            if (decrypted != null) {
+                server.setPassword(decrypted);
+            }
         }
         
         return server;

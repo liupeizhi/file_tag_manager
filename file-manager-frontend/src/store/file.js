@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { getFileTree, getFileList, uploadFile, deleteFile, renameFile, createFolder, syncFiles } from '@/api/file'
 
 export const useFileStore = defineStore('file', () => {
@@ -23,9 +23,18 @@ export const useFileStore = defineStore('file', () => {
       const result = await getFileList({
         serverId,
         path,
+        size: 1000,  // 获取足够多的文件
         ...filters
       })
-      fileList.value = result.content
+      const newList = result.content || []
+      
+      // 强制触发响应式更新
+      fileList.value = []
+      await new Promise(resolve => setTimeout(resolve, 0))
+      fileList.value = newList
+    } catch (error) {
+      console.error('加载文件列表失败:', error)
+      fileList.value = []
     } finally {
       loading.value = false
     }

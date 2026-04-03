@@ -23,3 +23,5 @@ export function deleteServer(id) {
 export function testConnection(id) {
   return request.post(`/servers/${id}/test`)
 }
+
+export const testServerConnection = testConnection

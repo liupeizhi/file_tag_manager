@@ -42,13 +42,7 @@ public class ServerService {
     @Transactional
     public ServerConfigDTO addServer(ServerConfigDTO dto) {
         ServerConfig server = new ServerConfig();
-        server.setName(dto.getName());
-        server.setUrl(dto.getUrl());
-        server.setUsername(dto.getUsername());
-        if (dto.getPassword() != null) {
-            server.setPassword(passwordEncryptor.encrypt(dto.getPassword()));
-        }
-        
+        copyFromDTO(dto, server);
         ServerConfig saved = serverConfigRepository.save(server);
         return toDTO(saved);
     }
@@ -57,16 +51,23 @@ public class ServerService {
     public ServerConfigDTO updateServer(Long id, ServerConfigDTO dto) {
         ServerConfig server = serverConfigRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("服务器不存在"));
-        
-        server.setName(dto.getName());
-        server.setUrl(dto.getUrl());
-        server.setUsername(dto.getUsername());
-        if (dto.getPassword() != null) {
-            server.setPassword(passwordEncryptor.encrypt(dto.getPassword()));
-        }
-        
+        copyFromDTO(dto, server);
         ServerConfig saved = serverConfigRepository.save(server);
         return toDTO(saved);
+    }
+    
+    private void copyFromDTO(ServerConfigDTO dto, ServerConfig server) {
+        server.setName(dto.getName());
+        server.setProtocol(dto.getProtocol() != null ? dto.getProtocol() : "webdav");
+        server.setUrl(dto.getUrl());
+        server.setUsername(dto.getUsername());
+        if (dto.getPassword() != null && !dto.getPassword().isEmpty()) {
+            server.setPassword(passwordEncryptor.encrypt(dto.getPassword()));
+        }
+        server.setRootPath(dto.getRootPath() != null ? dto.getRootPath() : "/");
+        server.setEnabled(dto.getEnabled() != null ? dto.getEnabled() : true);
+        server.setDescription(dto.getDescription());
+        server.setExtraConfig(dto.getExtraConfig());
     }
     
     @Transactional

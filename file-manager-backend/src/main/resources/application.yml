@@ -23,8 +23,10 @@ spring:
       max-request-size: 100MB
 
 server:
-  port: 8080
+  port: 1001
 
 app:
   encryption:
     key: filemanager12345
+  scripts:
+    path: /Users/liupeizhi/code_lab/file_manager/scripts
