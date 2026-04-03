@@ -1,0 +1,10 @@
+target/
+!.target/*.jar
+*.class
+*.log
+*.jar.original
+.idea
+*.iml
+.git
+.gitignore
+.factorypath

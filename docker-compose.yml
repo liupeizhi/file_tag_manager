@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: file_manager_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: file_manager
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - file_manager_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./file-manager-backend
+    container_name: file_manager_backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/file_manager?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-filemanager12345}
+      APP_SCRIPTS_PATH: ${APP_SCRIPTS_PATH:-/app/scripts}
+    ports:
+      - "1001:1001"
+    volumes:
+      - scripts_volume:/app/scripts
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - file_manager_network
+
+  frontend:
+    build: ./file-manager-frontend
+    container_name: file_manager_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - file_manager_network
+
+volumes:
+  mysql_data:
+  scripts_volume:
+
+networks:
+  file_manager_network:
+    driver: bridge
