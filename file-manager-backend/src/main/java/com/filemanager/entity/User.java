@@ -15,10 +15,10 @@ public class User {
     @Column(unique = true, nullable = false, length = 50)
     private String username;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String password;
 
-    @Column(unique = true, length = 100)
+    @Column(unique = true, nullable = true, length = 100)
     private String email;
 
     @Column(length = 50)
@@ -51,7 +51,6 @@ public class User {
 
     // Getters and Setters
     public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
 
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
