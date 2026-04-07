@@ -19,10 +19,14 @@
       
       <el-select
         v-if="userStore.isLoggedIn"
-        v-model="serverStore.currentServer"
-        placeholder="选择服务器"
+        :model-value="null"
+        placeholder=""
+        class="server-selector"
         @change="handleServerChange"
       >
+        <template #prefix>
+          <el-icon><Switch /></el-icon>
+        </template>
         <el-option
           v-for="server in serverStore.servers"
           :key="server.id"
@@ -77,7 +81,7 @@ import { useRouter } from 'vue-router'
 import { useServerStore } from '@/store/server'
 import { useUserStore } from '@/store/user'
 import { useFileStore } from '@/store/file'
-import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown } from '@element-plus/icons-vue'
+import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown, Switch } from '@element-plus/icons-vue'
 import ThemeSwitcher from '@/components/common/ThemeSwitcher.vue'
 
 const router = useRouter()
@@ -157,6 +161,11 @@ function goLogin() {
   font-weight: 500;
   cursor: help;
   transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.current-server span {
+  white-space: nowrap;
 }
 
 .current-server:hover {
@@ -178,12 +187,46 @@ function goLogin() {
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.user-info span {
+  white-space: nowrap;
 }
 
 .user-info:hover {
   background: color-mix(in srgb, var(--theme-primary) 15%, transparent);
   border-color: var(--theme-primary);
   transform: translateY(-1px);
+}
+
+.server-selector {
+  width: 40px;
+}
+
+.server-selector :deep(.el-input__wrapper) {
+  background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent);
+  box-shadow: none;
+  transition: all var(--transition-fast);
+  padding: 0 12px;
+}
+
+.server-selector :deep(.el-input__wrapper:hover) {
+  border-color: var(--theme-primary);
+}
+
+.server-selector :deep(.el-input__inner) {
+  display: none;
+}
+
+.server-selector :deep(.el-input__prefix) {
+  color: var(--theme-primary);
+  font-size: 18px;
+}
+
+.server-selector :deep(.el-select__suffix) {
+  display: none;
 }
 
 .dropdown-icon {
