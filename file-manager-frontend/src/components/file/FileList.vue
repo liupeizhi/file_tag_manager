@@ -52,7 +52,7 @@
             <el-dropdown-menu>
               <el-checkbox-group v-model="visibleColumns">
                 <el-dropdown-item v-for="col in optionalColumns" :key="col.prop">
-                  <el-checkbox :label="col.prop">{{ col.label }}</el-checkbox>
+                  <el-checkbox :value="col.prop">{{ col.label }}</el-checkbox>
                 </el-dropdown-item>
               </el-checkbox-group>
             </el-dropdown-menu>
