@@ -108,6 +108,17 @@ public class PreviewController {
             @RequestParam String filename) {
         try {
             InputStream stream = fileService.downloadFile(serverId, path);
+            String ext = filename.toLowerCase();
+            
+            // EPUB files don't need conversion, return directly
+            if (ext.endsWith(".epub")) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.valueOf("application/epub+zip"))
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                        .body(new InputStreamResource(stream));
+            }
+            
+            // MOBI and AZW3 need conversion
             File epubFile = ebookConverterService.convertToEpub(stream, filename);
             
             return ResponseEntity.ok()
