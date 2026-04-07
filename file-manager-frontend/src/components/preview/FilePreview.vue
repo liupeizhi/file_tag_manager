@@ -240,17 +240,64 @@
               </template>
 
               <template v-else-if="fileType === 'epub'">
-                <div ref="epubRef" class="epub-container"></div>
-                <div class="epub-controls" v-if="epubReady">
-                  <el-button-group>
-                    <el-button size="small" @click="prevPage">
-                      <el-icon><ArrowLeft /></el-icon>
-                    </el-button>
-                    <el-button size="small">{{ currentPage }} / {{ totalPages }}</el-button>
-                    <el-button size="small" @click="nextPage">
-                      <el-icon><ArrowRight /></el-icon>
-                    </el-button>
-                  </el-button-group>
+                <div class="epub-preview-container">
+                  <div class="epub-header">
+                    <div class="epub-info">
+                      <span class="epub-page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
+                      <span class="epub-section" v-if="currentSection">{{ currentSection }}</span>
+                    </div>
+                    <div class="epub-progress">
+                      <el-progress 
+                        :percentage="readingProgress" 
+                        :show-text="false"
+                        :stroke-width="4"
+                      />
+                      <span class="progress-text">{{ readingProgress.toFixed(1) }}%</span>
+                    </div>
+                  </div>
+                  
+                  <div class="epub-main">
+                    <div class="epub-toc-sidebar" :class="{ show: showToc }">
+                      <div class="toc-header">
+                        <h3>目录</h3>
+                        <el-button text size="small" @click="showToc = false">
+                          <el-icon><Close /></el-icon>
+                        </el-button>
+                      </div>
+                      <div class="toc-content">
+                        <div 
+                          v-for="(item, index) in epubToc" 
+                          :key="index"
+                          class="toc-item"
+                          :class="{ active: currentSection === item.label }"
+                          :style="{ paddingLeft: (item.depth || 0) * 16 + 'px' }"
+                          @click="goToChapter(item.href)"
+                        >
+                          {{ item.label }}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div ref="epubRef" class="epub-container"></div>
+                  </div>
+                  
+                  <div class="epub-footer">
+                    <el-button-group>
+                      <el-button size="small" @click="prevPage">
+                        <el-icon><ArrowLeft /></el-icon>
+                      </el-button>
+                      <el-button size="small" @click="showToc = !showToc">
+                        <el-icon><List /></el-icon>
+                      </el-button>
+                      <el-button size="small" @click="nextPage">
+                        <el-icon><ArrowRight /></el-icon>
+                      </el-button>
+                    </el-button-group>
+                    <div class="keyboard-hints">
+                      <span>← → 翻页</span>
+                      <span>↑ ↓ 目录</span>
+                    </div>
+                  </div>
                 </div>
               </template>
 
@@ -322,23 +369,13 @@ const videoRef = ref(null)
 const audioRef = ref(null)
 const documentRef = ref(null)
 const epubRef = ref(null)
-const imageRef = ref(null)
-const imageWrapperRef = ref(null)
-const imageToolbarRef = ref(null)
-const navigatorRef = ref(null)
-
-const isMaximized = ref(false)
-const isDragging = ref(false)
-const isResizing = ref(false)
-const dialogPos = ref({ x: 0, y: 0, width: 80, height: 80 })
-const dragStart = ref({ x: 0, y: 0 })
-const resizeStart = ref({ x: 0, y: 0, width: 0, height: 0 })
-
-const isMobile = ref(false)
-
 const epubBook = ref(null)
 const epubRendition = ref(null)
 const epubReady = ref(false)
+const epubToc = ref([])
+const showToc = ref(false)
+const currentSection = ref('')
+const readingProgress = ref(0)
 const currentPage = ref(1)
 const totalPages = ref(0)
 
@@ -623,11 +660,30 @@ async function loadEpub() {
       totalPages.value = spine.items.length
     })
     
+    epubBook.value.loaded.navigation.then(nav => {
+      epubToc.value = nav.toc
+    })
+    
     epubRendition.value.on('relocated', loc => {
       currentPage.value = loc.start.index + 1
+      readingProgress.value = (currentPage.value / totalPages.value) * 100
+      
+      if (loc.start.href) {
+        const section = epubToc.value.find(item => 
+          item.href && loc.start.href.includes(item.href.split('#')[0])
+        )
+        currentSection.value = section ? section.label : ''
+      }
     })
   } catch (e) {
-    error.value = 'EPUB 加载失败'
+    error.value = 'EPUB 加载失败: ' + e.message
+  }
+}
+
+function goToChapter(href) {
+  if (epubRendition.value && href) {
+    epubRendition.value.display(href)
+    showToc.value = false
   }
 }
 
@@ -1096,6 +1152,10 @@ function cleanup() {
   error.value = ''
   loading.value = false
   epubReady.value = false
+  epubToc.value = []
+  showToc.value = false
+  currentSection.value = ''
+  readingProgress.value = 0
   currentPage.value = 1
   totalPages.value = 0
   imageScale.value = 1
@@ -1195,19 +1255,33 @@ function handleKeydown(e) {
       prevImage()
     } else if (fileType.value === 'audio') {
       prevAudio()
+    } else if (fileType.value === 'epub') {
+      prevPage()
     }
   } else if (e.key === 'ArrowRight') {
     if (fileType.value === 'image') {
       nextImage()
     } else if (fileType.value === 'audio') {
       nextAudio()
+    } else if (fileType.value === 'epub') {
+      nextPage()
     }
-  } else if (e.key === 'ArrowUp' && fileType.value === 'image') {
-    e.preventDefault()
-    zoomIn()
-  } else if (e.key === 'ArrowDown' && fileType.value === 'image') {
-    e.preventDefault()
-    zoomOut()
+  } else if (e.key === 'ArrowUp') {
+    if (fileType.value === 'image') {
+      e.preventDefault()
+      zoomIn()
+    } else if (fileType.value === 'epub') {
+      e.preventDefault()
+      showToc.value = true
+    }
+  } else if (e.key === 'ArrowDown') {
+    if (fileType.value === 'image') {
+      e.preventDefault()
+      zoomOut()
+    } else if (fileType.value === 'epub') {
+      e.preventDefault()
+      showToc.value = false
+    }
   } else if (e.key === 'Escape') {
     close()
   }
@@ -1621,16 +1695,160 @@ audio {
   padding: 8px;
 }
 
-.epub-container {
+.epub-preview-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   width: 100%;
-  height: calc(100% - 40px);
 }
 
-.epub-controls {
+.epub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--el-fill-color-lighter);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  flex-shrink: 0;
+}
+
+.epub-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.epub-page-info {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.epub-section {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.epub-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  max-width: 400px;
+  margin: 0 20px;
+}
+
+.epub-progress .el-progress {
+  flex: 1;
+}
+
+.progress-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+  min-width: 50px;
+  text-align: right;
+}
+
+.epub-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+
+.epub-toc-sidebar {
   position: absolute;
-  bottom: 60px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 300px;
+  background: var(--el-bg-color);
+  border-right: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  z-index: 10;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+.epub-toc-sidebar.show {
+  transform: translateX(0);
+}
+
+.toc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.toc-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.toc-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.toc-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  transition: all 0.2s;
+  border-left: 3px solid transparent;
+}
+
+.toc-item:hover {
+  background: var(--el-fill-color-light);
+  border-left-color: var(--el-color-primary);
+}
+
+.toc-item.active {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 500;
+  border-left-color: var(--el-color-primary);
+}
+
+.epub-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.epub-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--el-fill-color-lighter);
+  border-top: 1px solid var(--el-border-color-lighter);
+  flex-shrink: 0;
+}
+
+.keyboard-hints {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.keyboard-hints span {
+  padding: 4px 8px;
+  background: var(--el-fill-color);
+  border-radius: 4px;
 }
 
 .markdown-body {
