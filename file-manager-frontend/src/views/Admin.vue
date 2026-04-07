@@ -15,6 +15,10 @@
           <el-icon><Monitor /></el-icon>
           <span>服务器管理</span>
         </el-menu-item>
+        <el-menu-item index="/admin/users">
+          <el-icon><User /></el-icon>
+          <span>用户管理</span>
+        </el-menu-item>
       </el-menu>
       <div class="sidebar-footer">
         <el-button type="primary" text @click="goHome">
@@ -32,7 +36,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Monitor, Back } from '@element-plus/icons-vue'
+import { Monitor, Back, User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()

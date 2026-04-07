@@ -18,6 +18,7 @@
       </div>
       
       <el-select
+        v-if="userStore.isLoggedIn"
         v-model="serverStore.currentServer"
         placeholder="选择服务器"
         @change="handleServerChange"
@@ -30,9 +31,41 @@
         />
       </el-select>
       
-      <el-button class="glass-button" @click="goAdmin">
-        <el-icon><Setting /></el-icon>
-        管理后台
+      <el-dropdown
+        v-if="userStore.isLoggedIn"
+        @command="handleDropdownCommand"
+      >
+        <div class="user-info">
+          <el-icon><User /></el-icon>
+          <span>{{ userStore.nickname }}</span>
+          <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+        </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              v-if="userStore.isAdmin"
+              command="admin"
+              :icon="Setting"
+            >
+              管理后台
+            </el-dropdown-item>
+            <el-dropdown-item
+              command="logout"
+              :icon="SwitchButton"
+              divided
+            >
+              退出登录
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      
+      <el-button
+        v-if="!userStore.isLoggedIn"
+        type="primary"
+        @click="goLogin"
+      >
+        登录
       </el-button>
     </div>
   </div>
@@ -42,12 +75,14 @@
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useServerStore } from '@/store/server'
+import { useUserStore } from '@/store/user'
 import { useFileStore } from '@/store/file'
-import { Monitor, Setting, FolderOpened } from '@element-plus/icons-vue'
+import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown } from '@element-plus/icons-vue'
 import ThemeSwitcher from '@/components/common/ThemeSwitcher.vue'
 
 const router = useRouter()
 const serverStore = useServerStore()
+const userStore = useUserStore()
 const fileStore = useFileStore()
 
 onMounted(async () => {
@@ -69,8 +104,17 @@ function handleServerChange(server) {
   }
 }
 
-function goAdmin() {
-  router.push('/admin/servers')
+function handleDropdownCommand(command) {
+  if (command === 'admin') {
+    router.push('/admin/servers')
+  } else if (command === 'logout') {
+    userStore.logout()
+    router.push('/login')
+  }
+}
+
+function goLogin() {
+  router.push('/login')
 }
 </script>
 
@@ -119,5 +163,31 @@ function goAdmin() {
   background: color-mix(in srgb, var(--theme-primary) 15%, transparent);
   border-color: var(--theme-primary);
   transform: translateY(-1px);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent);
+  border-radius: 8px;
+  color: var(--theme-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.user-info:hover {
+  background: color-mix(in srgb, var(--theme-primary) 15%, transparent);
+  border-color: var(--theme-primary);
+  transform: translateY(-1px);
+}
+
+.dropdown-icon {
+  font-size: 12px;
+  margin-left: 4px;
 }
 </style>
