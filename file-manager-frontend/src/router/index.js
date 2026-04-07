@@ -31,6 +31,12 @@ const routes = [
         name: 'ServerManage',
         component: () => import('@/views/admin/ServerManage.vue'),
         meta: { requiresAdmin: true }
+      },
+      {
+        path: 'users',
+        name: 'UserManage',
+        component: () => import('@/views/admin/UserManage.vue'),
+        meta: { requiresAdmin: true }
       }
     ]
   }
