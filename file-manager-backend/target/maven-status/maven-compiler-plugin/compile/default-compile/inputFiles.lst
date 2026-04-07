@@ -5,7 +5,6 @@
 /Users/liupeizhi/code_lab/file_manager/file-manager-backend/src/main/java/com/filemanager/exception/WebDavException.java
 /Users/liupeizhi/code_lab/file_manager/file-manager-backend/src/main/java/com/filemanager/exception/GlobalExceptionHandler.java
 /Users/liupeizhi/code_lab/file_manager/file-manager-backend/src/main/java/com/filemanager/dto/ApiResponse.java
-/Users/liupeizhi/code_lab/file_manager/file-manager-backend/src/main/java/com/filemanager/service/CustomUserDetailsService.java
 /Users/liupeizhi/code_lab/file_manager/file-manager-backend/src/main/java/com/filemanager/repository/FileTagRelationRepository.java
 /Users/liupeizhi/code_lab/file_manager/file-manager-backend/src/main/java/com/filemanager/entity/FileTag.java
 /Users/liupeizhi/code_lab/file_manager/file-manager-backend/src/main/java/com/filemanager/FileManagerApplication.java
