@@ -390,6 +390,15 @@ const videoCurrentTime = ref(0)
 const imageNaturalSize = ref({ width: 0, height: 0 })
 const navigatorViewport = ref({ x: 0, y: 0, width: 100, height: 100 })
 const isMobile = ref(false)
+const isDragging = ref(false)
+const isResizing = ref(false)
+const isMaximized = ref(false)
+const dialogPos = ref({ x: 0, y: 0, width: 80, height: 80 })
+const dragStart = ref({ x: 0, y: 0 })
+const resizeStart = ref({ x: 0, y: 0, width: 0, height: 0 })
+const imageRef = ref(null)
+const imageWrapperRef = ref(null)
+const navigatorRef = ref(null)
 const isNavigatorDragging = ref(false)
 const isImageDragging = ref(false)
 const imageDragStart = ref({ x: 0, y: 0, scrollX: 0, scrollY: 0 })
@@ -603,8 +612,17 @@ async function loadPreview() {
 }
 
 async function loadDocument() {
+  // 等待 documentRef 可用
+  let attempts = 0
+  while (!documentRef.value && attempts < 10) {
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 50))
+    attempts++
+  }
+  
   if (!documentRef.value) {
-    console.error('documentRef is null')
+    console.error('documentRef is null after waiting')
+    error.value = '文档容器初始化失败'
     return
   }
   
