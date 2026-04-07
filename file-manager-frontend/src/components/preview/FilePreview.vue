@@ -205,7 +205,22 @@
               </template>
 
               <template v-else-if="fileType === 'pdf'">
-                <iframe :src="previewUrl" frameborder="0"></iframe>
+                <div class="pdf-preview-container">
+                  <div class="pdf-toolbar">
+                    <el-button size="small" @click="openPdfInNewTab">
+                      <el-icon><Link /></el-icon>
+                      在新窗口打开
+                    </el-button>
+                    <span class="pdf-hint">如果PDF无法显示，请尝试在新窗口中打开</span>
+                  </div>
+                  <embed 
+                    :src="previewUrl" 
+                    type="application/pdf" 
+                    width="100%" 
+                    height="100%"
+                    @error="onError('PDF加载失败')"
+                  />
+                </div>
               </template>
 
               <template v-else-if="fileType === 'document'">
@@ -280,7 +295,7 @@ import {
   FullScreen, Close, CopyDocument, Loading, WarningFilled,
   Headset, ArrowLeft, ArrowRight, Download, Document,
   ZoomIn, ZoomOut, RefreshRight, Aim, List,
-  VideoPlay, VideoPause, ArrowDown
+  VideoPlay, VideoPause, ArrowDown, Link
 } from '@element-plus/icons-vue'
 import { getFileTypeInfo, formatFileSize } from '@/utils/file-type'
 import { downloadFile } from '@/api/file'
@@ -1064,6 +1079,12 @@ function download() {
   }
 }
 
+function openPdfInNewTab() {
+  if (previewUrl.value) {
+    window.open(previewUrl.value, '_blank')
+  }
+}
+
 function cleanup() {
   if (videoRef.value) { videoRef.value.pause(); videoRef.value.src = '' }
   if (audioRef.value) { audioRef.value.pause(); audioRef.value.src = '' }
@@ -1709,6 +1730,34 @@ audio {
   align-items: center;
   justify-content: center;
   height: 100%;
+}
+
+.pdf-preview-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--el-fill-color-lighter);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  flex-shrink: 0;
+}
+
+.pdf-hint {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin-left: 12px;
+}
+
+.pdf-preview-container embed {
+  flex: 1;
+  min-height: 0;
 }
 
 .ppt-notice {

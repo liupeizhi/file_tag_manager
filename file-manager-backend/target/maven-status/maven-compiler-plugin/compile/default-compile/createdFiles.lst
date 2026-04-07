@@ -22,7 +22,6 @@ com/filemanager/repository/FileTagRepository.class
 com/filemanager/config/CorsConfig.class
 com/filemanager/dto/ServerConfigDTO.class
 com/filemanager/FileManagerApplication.class
-com/filemanager/config/DataInitializer.class
 com/filemanager/controller/PreviewController.class
 com/filemanager/dto/LoginRequest.class
 com/filemanager/config/PasswordEncryptor.class
