@@ -3,9 +3,9 @@ spring:
     name: file-manager-backend
   
   datasource:
-    url: jdbc:mysql://localhost:18887/file_manager?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&createDatabaseIfNotExist=true
-    username: root
-    password: 123456
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:18887/file_manager?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&createDatabaseIfNotExist=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   
   jpa:
@@ -23,8 +23,17 @@ spring:
       max-request-size: 100MB
 
 server:
-  port: 8080
+  port: 1001
+  servlet:
+    session:
+      timeout: 7d
+      cookie:
+        http-only: true
+        same-site: lax
+        name: FILE_MANAGER_SESSION
 
 app:
   encryption:
-    key: filemanager12345
+    key: ${APP_ENCRYPTION_KEY:filemanager12345}
+  scripts:
+    path: ${APP_SCRIPTS_PATH:/Users/liupeizhi/code_lab/file_manager/scripts}
