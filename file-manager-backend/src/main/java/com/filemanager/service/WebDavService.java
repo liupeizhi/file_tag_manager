@@ -1,7 +1,8 @@
 package com.filemanager.service;
 
 import com.filemanager.entity.ServerConfig;
-import com.filemanager.exception.WebDavException;
+import com.filemanager.dto.FileResource;
+import com.filemanager.exception.ProtocolException;
 import com.github.sardine.Sardine;
 import com.github.sardine.SardineFactory;
 import com.github.sardine.DavResource;
@@ -10,10 +11,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
-public class WebDavService {
+public class WebDavService implements FileProtocolService {
     
     public Sardine createSardine(String username, String password) {
         System.setProperty("http.proxyHost", "");
@@ -28,6 +32,7 @@ public class WebDavService {
         return sardine;
     }
     
+    @Override
     public boolean testConnection(ServerConfig server) {
         try {
             Sardine sardine = createSardine(server.getUsername(), server.getPassword());
@@ -50,59 +55,87 @@ public class WebDavService {
         return result.toString();
     }
     
-    public List<DavResource> listFiles(ServerConfig server, String path) {
+    @Override
+    public List<FileResource> listFiles(ServerConfig server, String path) {
         try {
             Sardine sardine = createSardine(server.getUsername(), server.getPassword());
             String url = server.getUrl() + encodePath(path);
-            return sardine.list(url);
+            List<DavResource> resources = sardine.list(url);
+            
+            return resources.stream()
+                    .map(this::toFileResource)
+                    .collect(Collectors.toList());
         } catch (IOException e) {
-            throw new WebDavException("获取文件列表失败: " + e.getMessage(), e);
+            throw new ProtocolException("webdav", "listFiles", e.getMessage());
         }
     }
     
+    private FileResource toFileResource(DavResource resource) {
+        FileResource fr = new FileResource();
+        fr.setPath(resource.getPath());
+        fr.setName(getNameFromPath(resource.getPath()));
+        fr.setDirectory(resource.isDirectory());
+        fr.setSize(resource.getContentLength() != null ? resource.getContentLength() : 0);
+        fr.setContentType(resource.getContentType());
+        if (resource.getModified() != null) {
+            fr.setLastModified(LocalDateTime.ofInstant(resource.getModified().toInstant(), ZoneId.systemDefault()));
+        }
+        return fr;
+    }
+    
+    private String getNameFromPath(String path) {
+        if (path == null || path.isEmpty()) return "";
+        String normalized = path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+        int lastSlash = normalized.lastIndexOf('/');
+        return lastSlash >= 0 ? normalized.substring(lastSlash + 1) : normalized;
+    }
+    
+    @Override
     public InputStream downloadFile(ServerConfig server, String path) {
         try {
             Sardine sardine = createSardine(server.getUsername(), server.getPassword());
             String url = server.getUrl() + encodePath(path);
             return sardine.get(url);
         } catch (IOException e) {
-            throw new WebDavException("下载文件失败: " + e.getMessage(), e);
+            throw new ProtocolException("webdav", "downloadFile", e.getMessage());
         }
     }
     
+    @Override
     public void uploadFile(ServerConfig server, String path, InputStream data) {
         try {
             Sardine sardine = createSardine(server.getUsername(), server.getPassword());
             String url = server.getUrl() + encodePath(path);
-            
             byte[] bytes = data.readAllBytes();
-            
             sardine.put(url, bytes);
         } catch (IOException e) {
-            throw new WebDavException("上传文件失败: " + e.getMessage(), e);
+            throw new ProtocolException("webdav", "uploadFile", e.getMessage());
         }
     }
     
+    @Override
     public void createDirectory(ServerConfig server, String path) {
         try {
             Sardine sardine = createSardine(server.getUsername(), server.getPassword());
             String url = server.getUrl() + encodePath(path);
             sardine.createDirectory(url);
         } catch (IOException e) {
-            throw new WebDavException("创建目录失败: " + e.getMessage(), e);
+            throw new ProtocolException("webdav", "createDirectory", e.getMessage());
         }
     }
     
+    @Override
     public void delete(ServerConfig server, String path) {
         try {
             Sardine sardine = createSardine(server.getUsername(), server.getPassword());
             String url = server.getUrl() + encodePath(path);
             sardine.delete(url);
         } catch (IOException e) {
-            throw new WebDavException("删除失败: " + e.getMessage(), e);
+            throw new ProtocolException("webdav", "delete", e.getMessage());
         }
     }
     
+    @Override
     public void move(ServerConfig server, String from, String to) {
         try {
             Sardine sardine = createSardine(server.getUsername(), server.getPassword());
@@ -110,11 +143,12 @@ public class WebDavService {
             String toUrl = server.getUrl() + encodePath(to);
             sardine.move(fromUrl, toUrl);
         } catch (IOException e) {
-            throw new WebDavException("移动/重命名失败: " + e.getMessage(), e);
+            throw new ProtocolException("webdav", "move", e.getMessage());
         }
     }
     
-    public DavResource getFileInfo(ServerConfig server, String path) {
+    @Override
+    public FileResource getFileInfo(ServerConfig server, String path) {
         try {
             Sardine sardine = createSardine(server.getUsername(), server.getPassword());
             String encodedPath = encodePath(path);
@@ -122,23 +156,11 @@ public class WebDavService {
             
             List<DavResource> resources = sardine.list(url, 0);
             if (resources != null && !resources.isEmpty()) {
-                String expectedPath = encodedPath;
-                if (!expectedPath.startsWith("/")) {
-                    expectedPath = "/" + expectedPath;
-                }
-                
-                for (DavResource resource : resources) {
-                    String resourcePath = resource.getPath();
-                    if (resourcePath.endsWith(expectedPath) || 
-                        resourcePath.equals(expectedPath) ||
-                        resourcePath.endsWith(encodedPath)) {
-                        return resource;
-                    }
-                }
-                if (resources.size() > 1) {
-                    return resources.get(1);
-                }
-                return resources.get(0);
+                DavResource resource = resources.stream()
+                        .filter(r -> r.getPath().equals(encodedPath) || r.getPath().endsWith(encodedPath))
+                        .findFirst()
+                        .orElse(resources.get(0));
+                return toFileResource(resource);
             }
             return null;
         } catch (IOException e) {

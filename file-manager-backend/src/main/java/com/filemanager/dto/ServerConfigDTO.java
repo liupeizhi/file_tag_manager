@@ -14,4 +14,13 @@ public class ServerConfigDTO {
     private Boolean enabled;
     private String description;
     private String extraConfig;
+    
+    private String host;
+    private Integer port;
+    private String shareName;
+    private String domain;
+    private String privateKey;
+    private Boolean passiveMode;
+    
+    private Long userId;
 }

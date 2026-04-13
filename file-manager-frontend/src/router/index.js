@@ -24,13 +24,11 @@ const routes = [
     name: 'Admin',
     component: () => import('@/views/Admin.vue'),
     redirect: '/admin/servers',
-    meta: { requiresAdmin: true },
     children: [
       {
         path: 'servers',
         name: 'ServerManage',
-        component: () => import('@/views/admin/ServerManage.vue'),
-        meta: { requiresAdmin: true }
+        component: () => import('@/views/admin/ServerManage.vue')
       },
       {
         path: 'users',

@@ -39,6 +39,25 @@ public class ServerConfig {
     @Column(columnDefinition = "TEXT")
     private String extraConfig;
     
+    @Column(length = 255)
+    private String host;
+    
+    private Integer port;
+    
+    @Column(length = 255)
+    private String shareName;
+    
+    @Column(length = 100)
+    private String domain;
+    
+    @Column(columnDefinition = "TEXT")
+    private String privateKey;
+    
+    private Boolean passiveMode = true;
+    
+    @Column(name = "user_id")
+    private Long userId;
+    
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
     
@@ -52,6 +71,7 @@ public class ServerConfig {
         if (protocol == null) protocol = "webdav";
         if (rootPath == null) rootPath = "/";
         if (enabled == null) enabled = true;
+        if (passiveMode == null) passiveMode = true;
     }
     
     @PreUpdate

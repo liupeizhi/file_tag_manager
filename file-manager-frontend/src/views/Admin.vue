@@ -15,7 +15,7 @@
           <el-icon><Monitor /></el-icon>
           <span>服务器管理</span>
         </el-menu-item>
-        <el-menu-item index="/admin/users">
+        <el-menu-item v-if="isAdmin" index="/admin/users">
           <el-icon><User /></el-icon>
           <span>用户管理</span>
         </el-menu-item>
@@ -37,11 +37,14 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Monitor, Back, User } from '@element-plus/icons-vue'
+import { useUserStore } from '@/store/user'
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
 
 const activeMenu = computed(() => route.path)
+const isAdmin = computed(() => userStore.isAdmin)
 
 function goHome() {
   router.push('/')

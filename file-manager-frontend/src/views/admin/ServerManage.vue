@@ -15,11 +15,9 @@
           <el-tag :type="getProtocolTag(row.protocol)">{{ row.protocol?.toUpperCase() || 'WEBDAV' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="url" label="地址" min-width="250">
+      <el-table-column label="地址" min-width="250">
         <template #default="{ row }">
-          <el-tooltip :content="row.url" placement="top">
-            <span class="url-cell">{{ row.url }}</span>
-          </el-tooltip>
+          <span>{{ getServerAddress(row) }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="username" label="用户名" width="120" />
@@ -59,32 +57,21 @@
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '编辑服务器' : '添加服务器'"
-      width="550px"
+      width="600px"
       destroy-on-close
     >
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
         <el-form-item label="名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入服务器名称" />
         </el-form-item>
         
         <el-form-item label="协议" prop="protocol">
-          <el-select v-model="form.protocol" placeholder="请选择协议" style="width: 100%">
+          <el-select v-model="form.protocol" @change="onProtocolChange" style="width: 100%">
             <el-option label="WebDAV" value="webdav" />
-            <el-option label="SFTP" value="sftp" disabled />
-            <el-option label="FTP" value="ftp" disabled />
-            <el-option label="SMB" value="smb" disabled />
+            <el-option label="SMB" value="smb" />
+            <el-option label="SFTP" value="sftp" />
+            <el-option label="FTP" value="ftp" />
           </el-select>
-        </el-form-item>
-        
-        <el-form-item label="地址" prop="url">
-          <el-input v-model="form.url" placeholder="例如: http://192.168.1.100:8080">
-            <template #prepend v-if="form.protocol === 'webdav'">
-              <el-select v-model="urlScheme" style="width: 90px">
-                <el-option label="http://" value="http://" />
-                <el-option label="https://" value="https://" />
-              </el-select>
-            </template>
-          </el-input>
         </el-form-item>
         
         <el-form-item label="用户名" prop="username">
@@ -100,10 +87,59 @@
           />
         </el-form-item>
         
+        <template v-if="form.protocol === 'webdav'">
+          <el-form-item label="服务器地址" prop="url">
+            <el-input v-model="form.url" placeholder="https://nas.example.com/webdav" />
+          </el-form-item>
+        </template>
+        
+        <template v-if="form.protocol === 'smb'">
+          <el-form-item label="主机地址" prop="host">
+            <el-input v-model="form.host" placeholder="192.168.1.100" />
+          </el-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="共享名" prop="shareName">
+            <el-input v-model="form.shareName" placeholder="share" />
+          </el-form-item>
+          <el-form-item label="域">
+            <el-input v-model="form.domain" placeholder="WORKGROUP" />
+          </el-form-item>
+        </template>
+        
+        <template v-if="form.protocol === 'sftp'">
+          <el-form-item label="主机地址" prop="host">
+            <el-input v-model="form.host" placeholder="192.168.1.100" />
+          </el-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="认证方式">
+            <el-select v-model="form.authType" style="width: 100%">
+              <el-option label="密码" value="password" />
+              <el-option label="私钥" value="privateKey" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="form.authType === 'privateKey'" label="私钥">
+            <el-input v-model="form.privateKey" type="textarea" :rows="5" placeholder="-----BEGIN RSA PRIVATE KEY-----" />
+          </el-form-item>
+        </template>
+        
+        <template v-if="form.protocol === 'ftp'">
+          <el-form-item label="主机地址" prop="host">
+            <el-input v-model="form.host" placeholder="192.168.1.100" />
+          </el-form-item>
+          <el-form-item label="端口">
+            <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="被动模式">
+            <el-checkbox v-model="form.passiveMode">启用被动模式（防火墙环境下建议启用）</el-checkbox>
+          </el-form-item>
+        </template>
+        
         <el-form-item label="根路径" prop="rootPath">
-          <el-input v-model="form.rootPath" placeholder="例如: /documents">
-            <template #prepend>/</template>
-          </el-input>
+          <el-input v-model="form.rootPath" placeholder="/" />
         </el-form-item>
         
         <el-form-item label="描述">
@@ -114,25 +150,12 @@
             placeholder="服务器描述（可选）"
           />
         </el-form-item>
-        
-        <el-collapse>
-          <el-collapse-item title="高级配置" name="advanced">
-            <el-form-item label="扩展配置">
-              <el-input 
-                v-model="form.extraConfig" 
-                type="textarea" 
-                :rows="3"
-                placeholder="JSON 格式的扩展配置"
-              />
-            </el-form-item>
-          </el-collapse-item>
-        </el-collapse>
       </el-form>
       
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button @click="testFromDialog">测试连接</el-button>
-        <el-button type="primary" @click="submitForm">保存</el-button>
+        <el-button @click="testFromDialog" :loading="testing">测试连接</el-button>
+        <el-button type="primary" @click="submitForm" :loading="saving">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -145,6 +168,8 @@ import { Plus } from '@element-plus/icons-vue'
 import { getServers, addServer, updateServer, deleteServer as deleteServerApi, testServerConnection } from '@/api/server'
 
 const loading = ref(false)
+const testing = ref(false)
+const saving = ref(false)
 const servers = ref([])
 const dialogVisible = ref(false)
 const isEdit = ref(false)
@@ -155,28 +180,36 @@ const form = reactive({
   name: '',
   protocol: 'webdav',
   url: '',
+  host: '',
+  port: null,
+  shareName: '',
+  domain: '',
   username: '',
   password: '',
-  rootPath: '',
+  privateKey: '',
+  passiveMode: true,
+  authType: 'password',
+  rootPath: '/',
   description: '',
-  extraConfig: ''
+  enabled: true
 })
 
-const rules = {
-  name: [{ required: true, message: '请输入服务器名称', trigger: 'blur' }],
-  protocol: [{ required: true, message: '请选择协议', trigger: 'change' }],
-  url: [{ required: true, message: '请输入服务器地址', trigger: 'blur' }]
-}
-
-const urlScheme = computed({
-  get: () => {
-    if (form.url?.startsWith('https://')) return 'https://'
-    return 'http://'
-  },
-  set: (val) => {
-    const urlWithoutScheme = form.url?.replace(/^https?:\/\//, '') || ''
-    form.url = val + urlWithoutScheme
+const rules = computed(() => {
+  const baseRules = {
+    name: [{ required: true, message: '请输入服务器名称', trigger: 'blur' }],
+    protocol: [{ required: true, message: '请选择协议', trigger: 'change' }]
   }
+  
+  if (form.protocol === 'webdav') {
+    baseRules.url = [{ required: true, message: '请输入服务器地址', trigger: 'blur' }]
+  } else {
+    baseRules.host = [{ required: true, message: '请输入主机地址', trigger: 'blur' }]
+    if (form.protocol === 'smb') {
+      baseRules.shareName = [{ required: true, message: '请输入共享名', trigger: 'blur' }]
+    }
+  }
+  
+  return baseRules
 })
 
 onMounted(() => {
@@ -195,43 +228,111 @@ async function loadServers() {
   }
 }
 
+function getDefaultPort(protocol) {
+  switch (protocol) {
+    case 'smb': return 445
+    case 'sftp': return 22
+    case 'ftp': return 21
+    default: return null
+  }
+}
+
+function getDefaultForm() {
+  return {
+    id: null,
+    name: '',
+    protocol: 'webdav',
+    url: '',
+    host: '',
+    port: null,
+    shareName: '',
+    domain: '',
+    username: '',
+    password: '',
+    privateKey: '',
+    passiveMode: true,
+    authType: 'password',
+    rootPath: '/',
+    description: '',
+    enabled: true
+  }
+}
+
+function onProtocolChange(protocol) {
+  form.port = getDefaultPort(protocol)
+  if (protocol !== 'smb') {
+    form.shareName = ''
+    form.domain = ''
+  }
+  if (protocol !== 'sftp') {
+    form.privateKey = ''
+    form.authType = 'password'
+  }
+  if (protocol !== 'ftp') {
+    form.passiveMode = true
+  }
+  if (protocol !== 'webdav') {
+    form.url = ''
+  }
+  if (protocol === 'webdav') {
+    form.host = ''
+  }
+}
+
 function openDialog(server = null) {
   isEdit.value = !!server
   if (server) {
-    Object.assign(form, {
+    Object.assign(form, getDefaultForm(), {
       id: server.id,
       name: server.name,
       protocol: server.protocol || 'webdav',
-      url: server.url,
+      url: server.url || '',
+      host: server.host || '',
+      port: server.port || getDefaultPort(server.protocol),
+      shareName: server.shareName || '',
+      domain: server.domain || '',
       username: server.username || '',
       password: '',
-      rootPath: server.rootPath || '',
+      privateKey: server.privateKey || '',
+      passiveMode: server.passiveMode !== false,
+      authType: server.privateKey ? 'privateKey' : 'password',
+      rootPath: server.rootPath || '/',
       description: server.description || '',
-      extraConfig: server.extraConfig || ''
+      enabled: server.enabled !== false
     })
   } else {
-    Object.assign(form, {
-      id: null,
-      name: '',
-      protocol: 'webdav',
-      url: '',
-      username: '',
-      password: '',
-      rootPath: '',
-      description: '',
-      extraConfig: ''
-    })
+    Object.assign(form, getDefaultForm())
   }
   dialogVisible.value = true
+}
+
+function prepareFormData() {
+  const data = { ...form }
+  
+  if (data.authType === 'password') {
+    data.privateKey = ''
+  }
+  
+  if (data.protocol === 'webdav') {
+    data.host = ''
+    data.port = null
+    data.shareName = ''
+    data.domain = ''
+    data.privateKey = ''
+    data.passiveMode = true
+  }
+  
+  if (!data.password) delete data.password
+  
+  return data
 }
 
 async function submitForm() {
   try {
     await formRef.value.validate()
     
-    const data = { ...form }
-    if (!data.password) delete data.password
-    if (!data.rootPath) data.rootPath = '/'
+    saving.value = true
+    const data = prepareFormData()
     
     if (isEdit.value) {
       await updateServer(form.id, data)
@@ -247,6 +348,8 @@ async function submitForm() {
     if (error !== 'cancel') {
       ElMessage.error(isEdit.value ? '更新失败' : '添加失败')
     }
+  } finally {
+    saving.value = false
   }
 }
 
@@ -262,9 +365,24 @@ async function testConnection(server) {
 async function testFromDialog() {
   try {
     await formRef.value.validate()
-    ElMessage.info('测试连接中...')
+    
+    testing.value = true
+    const data = prepareFormData()
+    
+    if (isEdit.value) {
+      await testServerConnection(form.id)
+      ElMessage.success('连接成功')
+    } else {
+      const result = await addServer(data)
+      if (result) {
+        await testServerConnection(result.id)
+        ElMessage.success('连接成功')
+      }
+    }
   } catch (error) {
-    // ignore
+    ElMessage.error('连接失败: ' + (error.message || '未知错误'))
+  } finally {
+    testing.value = false
   }
 }
 
@@ -304,6 +422,18 @@ function getProtocolTag(protocol) {
   }
   return tags[protocol] || ''
 }
+
+function getServerAddress(server) {
+  if (server.protocol === 'webdav' || !server.protocol) {
+    return server.url
+  }
+  const host = server.host || ''
+  const port = server.port ? `:${server.port}` : ''
+  if (server.protocol === 'smb') {
+    return `${host}${port}/${server.shareName || ''}`
+  }
+  return `${host}${port}`
+}
 </script>
 
 <style scoped>
@@ -322,30 +452,5 @@ function getProtocolTag(protocol) {
   margin: 0;
   font-size: 20px;
   color: #303133;
-}
-
-.url-cell {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
-  max-width: 230px;
-}
-
-:deep(.el-collapse) {
-  border: none;
-  margin-top: 10px;
-}
-
-:deep(.el-collapse-item__header) {
-  background: #f5f7fa;
-  padding: 0 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  color: #909399;
-}
-
-:deep(.el-collapse-item__content) {
-  padding: 16px 0 0 0;
 }
 </style>

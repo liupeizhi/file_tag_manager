@@ -2,13 +2,14 @@ package com.filemanager.service;
 
 import com.filemanager.config.PasswordEncryptor;
 import com.filemanager.dto.FileDTO;
+import com.filemanager.dto.FileResource;
 import com.filemanager.entity.FileMetadata;
 import com.filemanager.entity.FileTagRelation;
 import com.filemanager.entity.ServerConfig;
+import com.filemanager.exception.ProtocolException;
 import com.filemanager.repository.FileMetadataRepository;
 import com.filemanager.repository.FileTagRelationRepository;
 import com.filemanager.repository.ServerConfigRepository;
-import com.github.sardine.DavResource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -41,7 +42,7 @@ public class FileService {
     private FileTagRelationRepository fileTagRelationRepository;
     
     @Autowired
-    private WebDavService webDavService;
+    private Map<String, FileProtocolService> protocolServices;
     
     @Autowired
     private PasswordEncryptor passwordEncryptor;
@@ -67,9 +68,26 @@ public class FileService {
         FILE_TYPE_MAP.put("md", Map.of("icon", "markdown", "color", "#34495E", "type", "document"));
     }
     
+    private FileProtocolService getProtocolService(ServerConfig server) {
+        String protocol = server.getProtocol() != null ? server.getProtocol().toLowerCase() : "webdav";
+        String beanName = protocol.equals("webdav") ? "webDavService" : protocol + "Service";
+        FileProtocolService service = protocolServices.get(beanName);
+        if (service == null) {
+            throw new ProtocolException(protocol, "init", "不支持的协议类型: " + protocol);
+        }
+        return service;
+    }
+    
+    private String getExtension(String filename) {
+        if (filename == null || filename.isEmpty()) return "";
+        int dot = filename.lastIndexOf('.');
+        return dot > 0 ? filename.substring(dot + 1).toLowerCase() : "";
+    }
+    
     public List<FileDTO> getFileTree(Long serverId, String path) {
         ServerConfig server = getServer(serverId);
-        List<DavResource> resources = webDavService.listFiles(server, path);
+        FileProtocolService service = getProtocolService(server);
+        List<FileResource> resources = service.listFiles(server, path);
         
         return resources.stream()
                 .filter(r -> !r.getPath().equals(path))
@@ -86,7 +104,8 @@ public class FileService {
         }
         
         ServerConfig server = getServer(serverId);
-        List<DavResource> resources = webDavService.listFiles(server, path != null ? path : "/");
+        FileProtocolService service = getProtocolService(server);
+        List<FileResource> resources = service.listFiles(server, path != null ? path : "/");
         
         List<FileDTO> allFiles = resources.stream()
                 .filter(r -> !r.getPath().equals(path))
@@ -149,14 +168,15 @@ public class FileService {
     @Transactional
     public Map<String, Integer> syncFiles(Long serverId, String path) {
         ServerConfig server = getServer(serverId);
+        FileProtocolService service = getProtocolService(server);
         
         Map<String, Integer> result = new HashMap<>();
         result.put("added", 0);
         result.put("updated", 0);
         result.put("deleted", 0);
         
-        Map<String, DavResource> webdavResources = new HashMap<>();
-        collectWebDavResources(server, path, webdavResources);
+        Map<String, FileResource> fileResources = new HashMap<>();
+        collectResources(service, server, path, fileResources);
         
         String pathPrefix = path.equals("/") ? "/" : path;
         List<FileMetadata> existingMetadata = fileMetadataRepository.findByServerId(serverId).stream()
@@ -167,7 +187,7 @@ public class FileService {
                 .collect(Collectors.toMap(FileMetadata::getPath, m -> m));
         
         for (FileMetadata metadata : existingMetadata) {
-            if (!webdavResources.containsKey(metadata.getPath())) {
+            if (!fileResources.containsKey(metadata.getPath())) {
                 fileTagRelationRepository.deleteByFileId(metadata.getId());
                 fileTagRelationRepository.deleteByFilePathStartingWithAndServerId(metadata.getPath() + "/", serverId);
                 fileMetadataRepository.delete(metadata);
@@ -175,12 +195,12 @@ public class FileService {
             }
         }
         
-        for (Map.Entry<String, DavResource> entry : webdavResources.entrySet()) {
-            String webdavPath = entry.getKey();
-            DavResource resource = entry.getValue();
+        for (Map.Entry<String, FileResource> entry : fileResources.entrySet()) {
+            String filePath = entry.getKey();
+            FileResource resource = entry.getValue();
             
-            if (existingMap.containsKey(webdavPath)) {
-                FileMetadata metadata = existingMap.get(webdavPath);
+            if (existingMap.containsKey(filePath)) {
+                FileMetadata metadata = existingMap.get(filePath);
                 updateMetadataFromResource(metadata, resource);
                 fileMetadataRepository.save(metadata);
                 result.put("updated", result.get("updated") + 1);
@@ -194,14 +214,14 @@ public class FileService {
         return result;
     }
     
-    private void collectWebDavResources(ServerConfig server, String path, Map<String, DavResource> allResources) {
+    private void collectResources(FileProtocolService service, ServerConfig server, String path, Map<String, FileResource> allResources) {
         try {
-            List<DavResource> resources = webDavService.listFiles(server, path);
-            for (DavResource resource : resources) {
+            List<FileResource> resources = service.listFiles(server, path);
+            for (FileResource resource : resources) {
                 if (!resource.getPath().equals(path)) {
                     allResources.put(resource.getPath(), resource);
                     if (resource.isDirectory()) {
-                        collectWebDavResources(server, resource.getPath(), allResources);
+                        collectResources(service, server, resource.getPath(), allResources);
                     }
                 }
             }
@@ -209,29 +229,23 @@ public class FileService {
         }
     }
     
-    private void updateMetadataFromResource(FileMetadata metadata, DavResource resource) {
+    private void updateMetadataFromResource(FileMetadata metadata, FileResource resource) {
         metadata.setName(resource.getName());
         metadata.setIsDirectory(resource.isDirectory());
-        metadata.setSize(resource.getContentLength());
+        metadata.setSize(resource.getSize());
         metadata.setContentType(resource.getContentType());
-        if (resource.getModified() != null) {
-            metadata.setLastModified(LocalDateTime.ofInstant(
-                    resource.getModified().toInstant(), ZoneId.systemDefault()));
-        }
+        metadata.setLastModified(resource.getLastModified());
     }
     
-    private FileMetadata createMetadataFromResource(Long serverId, DavResource resource) {
+    private FileMetadata createMetadataFromResource(Long serverId, FileResource resource) {
         FileMetadata metadata = new FileMetadata();
         metadata.setServerId(serverId);
         metadata.setPath(resource.getPath());
         metadata.setName(resource.getName());
         metadata.setIsDirectory(resource.isDirectory());
-        metadata.setSize(resource.getContentLength());
+        metadata.setSize(resource.getSize());
         metadata.setContentType(resource.getContentType());
-        if (resource.getModified() != null) {
-            metadata.setLastModified(LocalDateTime.ofInstant(
-                    resource.getModified().toInstant(), ZoneId.systemDefault()));
-        }
+        metadata.setLastModified(resource.getLastModified());
         return metadata;
     }
     
@@ -242,7 +256,8 @@ public class FileService {
         }
         
         ServerConfig server = getServer(serverId);
-        DavResource resource = webDavService.getFileInfo(server, path);
+        FileProtocolService service = getProtocolService(server);
+        FileResource resource = service.getFileInfo(server, path);
         
         if (resource == null) {
             FileMetadata metadata = new FileMetadata();
@@ -258,13 +273,9 @@ public class FileService {
         metadata.setPath(path);
         metadata.setName(resource.getName());
         metadata.setIsDirectory(resource.isDirectory());
-        metadata.setSize(resource.getContentLength());
+        metadata.setSize(resource.getSize());
         metadata.setContentType(resource.getContentType());
-        
-        if (resource.getModified() != null) {
-            metadata.setLastModified(LocalDateTime.ofInstant(
-                    resource.getModified().toInstant(), ZoneId.systemDefault()));
-        }
+        metadata.setLastModified(resource.getLastModified());
         
         return fileMetadataRepository.save(metadata);
     }
@@ -279,31 +290,36 @@ public class FileService {
     @Transactional
     public void uploadFile(Long serverId, String path, String filename, InputStream data) {
         ServerConfig server = getServer(serverId);
+        FileProtocolService service = getProtocolService(server);
         String fullPath = path.endsWith("/") ? path + filename : path + "/" + filename;
-        webDavService.uploadFile(server, fullPath, data);
+        service.uploadFile(server, fullPath, data);
     }
     
     public InputStream downloadFile(Long serverId, String path) {
         ServerConfig server = getServer(serverId);
-        return webDavService.downloadFile(server, path);
+        FileProtocolService service = getProtocolService(server);
+        return service.downloadFile(server, path);
     }
     
     @Transactional
     public void renameFile(Long serverId, String oldPath, String newPath) {
         ServerConfig server = getServer(serverId);
-        webDavService.move(server, oldPath, newPath);
+        FileProtocolService service = getProtocolService(server);
+        service.move(server, oldPath, newPath);
     }
     
     @Transactional
     public void deleteFile(Long serverId, String path) {
         ServerConfig server = getServer(serverId);
-        webDavService.delete(server, path);
+        FileProtocolService service = getProtocolService(server);
+        service.delete(server, path);
     }
     
     @Transactional
     public void createFolder(Long serverId, String path) {
         ServerConfig server = getServer(serverId);
-        webDavService.createDirectory(server, path);
+        FileProtocolService service = getProtocolService(server);
+        service.createDirectory(server, path);
     }
     
     private ServerConfig getServer(Long serverId) {
@@ -320,19 +336,15 @@ public class FileService {
         return server;
     }
     
-    private FileDTO toDTO(DavResource resource, Long serverId) {
+    private FileDTO toDTO(FileResource resource, Long serverId) {
         FileDTO dto = new FileDTO();
         dto.setServerId(serverId);
         dto.setPath(resource.getPath());
         dto.setName(resource.getName());
         dto.setIsDirectory(resource.isDirectory());
-        dto.setSize(resource.getContentLength());
+        dto.setSize(resource.getSize());
         dto.setContentType(resource.getContentType());
-        
-        if (resource.getModified() != null) {
-            dto.setLastModified(LocalDateTime.ofInstant(
-                    resource.getModified().toInstant(), ZoneId.systemDefault()));
-        }
+        dto.setLastModified(resource.getLastModified());
         
         setFileType(dto);
         return dto;

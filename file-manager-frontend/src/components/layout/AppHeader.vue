@@ -47,7 +47,6 @@
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item
-              v-if="userStore.isAdmin"
               command="admin"
               :icon="Setting"
             >

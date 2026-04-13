@@ -51,6 +51,27 @@
             <version>5.10</version>
         </dependency>
         
+        <!-- SMB protocol - smbj -->
+        <dependency>
+            <groupId>com.hierynomus</groupId>
+            <artifactId>smbj</artifactId>
+            <version>0.13.0</version>
+        </dependency>
+        
+        <!-- SFTP protocol - JSch -->
+        <dependency>
+            <groupId>com.jcraft</groupId>
+            <artifactId>jsch</artifactId>
+            <version>0.1.55</version>
+        </dependency>
+        
+        <!-- FTP protocol - Apache Commons Net -->
+        <dependency>
+            <groupId>commons-net</groupId>
+            <artifactId>commons-net</artifactId>
+            <version>3.9.0</version>
+        </dependency>
+        
         <dependency>
             <groupId>jakarta.xml.bind</groupId>
             <artifactId>jakarta.xml.bind-api</artifactId>
