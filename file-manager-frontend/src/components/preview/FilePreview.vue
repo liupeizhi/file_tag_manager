@@ -302,7 +302,19 @@
               </template>
 
               <template v-else-if="fileType === 'markdown'">
-                <div class="markdown-body" v-html="renderedMarkdown"></div>
+                <div class="markdown-preview-container">
+                  <div class="markdown-toolbar">
+                    <el-button-group>
+                      <el-button size="small" @click="scrollMarkdownTop">
+                        <el-icon><ArrowUp /></el-icon>
+                      </el-button>
+                      <el-button size="small" @click="scrollMarkdownBottom">
+                        <el-icon><ArrowDown /></el-icon>
+                      </el-button>
+                    </el-button-group>
+                  </div>
+                  <div ref="markdownRef" class="markdown-body" v-html="renderedMarkdown"></div>
+                </div>
               </template>
 
               <template v-else-if="fileType === 'code'">
@@ -369,6 +381,7 @@ const videoRef = ref(null)
 const audioRef = ref(null)
 const documentRef = ref(null)
 const epubRef = ref(null)
+const markdownRef = ref(null)
 const epubBook = ref(null)
 const epubRendition = ref(null)
 const epubReady = ref(false)
@@ -576,6 +589,22 @@ async function loadPreview() {
       
       if (fileType.value === 'markdown') {
         const { marked } = await import('marked')
+        const hljs = await import('highlight.js')
+        
+        // 配置 marked
+        marked.setOptions({
+          highlight: function(code, lang) {
+            if (lang && hljs.default.getLanguage(lang)) {
+              try {
+                return hljs.default.highlight(code, { language: lang }).value
+              } catch (err) {}
+            }
+            return hljs.default.highlightAuto(code).value
+          },
+          breaks: true,
+          gfm: true
+        })
+        
         renderedMarkdown.value = marked.parse(textContent.value)
       } else if (fileType.value === 'code') {
         const hljs = await import('highlight.js')
@@ -826,6 +855,15 @@ function togglePlay() {
     videoRef.value.play()
   } else {
     videoRef.value.pause()
+  }
+}
+
+function toggleAudioPlay() {
+  if (!audioRef.value) return
+  if (audioRef.value.paused) {
+    audioRef.value.play()
+  } else {
+    audioRef.value.pause()
   }
 }
 
@@ -1160,6 +1198,18 @@ function openPdfInNewTab() {
   }
 }
 
+function scrollMarkdownTop() {
+  if (markdownRef.value) {
+    markdownRef.value.scrollTop = 0
+  }
+}
+
+function scrollMarkdownBottom() {
+  if (markdownRef.value) {
+    markdownRef.value.scrollTop = markdownRef.value.scrollHeight
+  }
+}
+
 function cleanup() {
   if (videoRef.value) { videoRef.value.pause(); videoRef.value.src = '' }
   if (audioRef.value) { audioRef.value.pause(); audioRef.value.src = '' }
@@ -1180,6 +1230,7 @@ function cleanup() {
   imageScale.value = 1
   imageNaturalSize.value = { width: 0, height: 0 }
   navigatorViewport.value = { x: 0, y: 0, width: 100, height: 100 }
+  if (markdownRef.value) markdownRef.value.scrollTop = 0
 }
 
 onMounted(() => {
@@ -1265,6 +1316,15 @@ function handleKeydown(e) {
       e.preventDefault()
       videoVolume.value = Math.max(0, videoVolume.value - 0.1)
       if (videoRef.value) videoRef.value.volume = videoVolume.value
+      return
+    }
+  }
+  
+  // Audio controls
+  if (fileType.value === 'audio' && audioRef.value) {
+    if (e.key === ' ') {
+      e.preventDefault()
+      toggleAudioPlay()
       return
     }
   }
@@ -1870,16 +1930,222 @@ audio {
   border-radius: 4px;
 }
 
-.markdown-body {
-  line-height: 1.8;
+.markdown-preview-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
 }
 
-.markdown-body :deep(h1) { font-size: 28px; margin: 1em 0 0.5em; }
-.markdown-body :deep(h2) { font-size: 22px; margin: 1em 0 0.5em; }
-.markdown-body :deep(h3) { font-size: 18px; margin: 1em 0 0.5em; }
-.markdown-body :deep(pre) { background: var(--el-fill-color-dark); padding: 16px; border-radius: 6px; overflow-x: auto; }
-.markdown-body :deep(code) { font-family: monospace; font-size: 13px; }
-.markdown-body :deep(a) { color: var(--el-color-primary); }
+.markdown-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 16px;
+  background: var(--el-fill-color-lighter);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  flex-shrink: 0;
+}
+
+.markdown-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 24px 32px;
+  line-height: 1.8;
+  font-size: 15px;
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color);
+}
+
+.markdown-body :deep(h1) { 
+  font-size: 32px; 
+  font-weight: 600;
+  margin: 1.5em 0 0.8em; 
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  line-height: 1.3;
+}
+
+.markdown-body :deep(h2) { 
+  font-size: 26px; 
+  font-weight: 600;
+  margin: 1.3em 0 0.6em; 
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  line-height: 1.3;
+}
+
+.markdown-body :deep(h3) { 
+  font-size: 22px; 
+  font-weight: 600;
+  margin: 1.2em 0 0.5em; 
+  line-height: 1.3;
+}
+
+.markdown-body :deep(h4) { 
+  font-size: 18px; 
+  font-weight: 600;
+  margin: 1em 0 0.5em; 
+}
+
+.markdown-body :deep(h5) { 
+  font-size: 16px; 
+  font-weight: 600;
+  margin: 1em 0 0.5em; 
+}
+
+.markdown-body :deep(h6) { 
+  font-size: 14px; 
+  font-weight: 600;
+  margin: 1em 0 0.5em; 
+  color: var(--el-text-color-secondary);
+}
+
+.markdown-body :deep(p) {
+  margin: 0.8em 0;
+}
+
+.markdown-body :deep(a) { 
+  color: var(--el-color-primary); 
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.markdown-body :deep(a:hover) {
+  color: var(--el-color-primary-light-3);
+  text-decoration: underline;
+}
+
+.markdown-body :deep(strong) {
+  font-weight: 600;
+}
+
+.markdown-body :deep(em) {
+  font-style: italic;
+}
+
+.markdown-body :deep(ul), .markdown-body :deep(ol) {
+  margin: 0.8em 0;
+  padding-left: 2em;
+}
+
+.markdown-body :deep(li) {
+  margin: 0.3em 0;
+}
+
+.markdown-body :deep(blockquote) {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--el-color-primary);
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-secondary);
+}
+
+.markdown-body :deep(blockquote p) {
+  margin: 0.5em 0;
+}
+
+.markdown-body :deep(code) {
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.9em;
+  padding: 2px 6px;
+  background: var(--el-fill-color-dark);
+  border-radius: 3px;
+  color: var(--el-color-danger);
+}
+
+.markdown-body :deep(pre) {
+  margin: 1em 0;
+  padding: 16px;
+  background: #1e1e1e;
+  border-radius: 6px;
+  overflow-x: auto;
+  position: relative;
+}
+
+.markdown-body :deep(pre code) {
+  padding: 0;
+  background: transparent;
+  color: #d4d4d4;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.markdown-body :deep(table) {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.markdown-body :deep(table th) {
+  padding: 10px 12px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color);
+  font-weight: 600;
+  text-align: left;
+}
+
+.markdown-body :deep(table td) {
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color);
+}
+
+.markdown-body :deep(table tr:hover) {
+  background: var(--el-fill-color-lighter);
+}
+
+.markdown-body :deep(hr) {
+  margin: 1.5em 0;
+  border: none;
+  border-top: 1px solid var(--el-border-color);
+}
+
+.markdown-body :deep(img) {
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  border-radius: 4px;
+}
+
+.markdown-body :deep(figure) {
+  margin: 1em 0;
+  text-align: center;
+}
+
+.markdown-body :deep(figcaption) {
+  font-size: 0.9em;
+  color: var(--el-text-color-secondary);
+  margin-top: 0.5em;
+}
+
+.markdown-body :deep(.task-list-item) {
+  list-style: none;
+  margin-left: -1.5em;
+}
+
+.markdown-body :deep(input[type="checkbox"]) {
+  margin-right: 0.5em;
+}
+
+.markdown-body :deep(details) {
+  margin: 1em 0;
+  padding: 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+}
+
+.markdown-body :deep(summary) {
+  cursor: pointer;
+  font-weight: 600;
+  outline: none;
+}
+
+.markdown-body :deep(summary:hover) {
+  color: var(--el-color-primary);
+}
 
 .code-block {
   margin: 0;
