@@ -224,7 +224,7 @@ public class FileTagService {
         }
     }
     
-    public List<FileDTO> getFilesByTagWithDetails(Long tagId) {
+    public List<FileDTO> getFilesByTagWithDetails(Long tagId, Long serverId) {
         List<Long> tagIds = getAllTagIdsIncludingChildren(tagId);
         List<FileDTO> result = new ArrayList<>();
         
@@ -232,6 +232,10 @@ public class FileTagService {
             List<FileTagRelation> relations = relationRepository.findByTagId(tid);
             
             for (FileTagRelation relation : relations) {
+                if (serverId != null && !serverId.equals(relation.getServerId())) {
+                    continue;
+                }
+                
                 try {
                     FileMetadata metadata = fileMetadataRepository
                             .findByServerIdAndPath(relation.getServerId(), relation.getFilePath())

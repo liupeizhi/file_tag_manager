@@ -83,7 +83,7 @@ async function handleTagClick(tag) {
   
   try {
     fileListRef.value.setTagFilterMode(true, tag)
-    const files = await getFilesByTagWithDetails(tag.id)
+    const files = await getFilesByTagWithDetails(tag.id, serverStore.currentServer?.id)
     console.log('Files by tag:', files)
     fileListRef.value.setTagFilteredFiles(files || [])
   } catch (error) {

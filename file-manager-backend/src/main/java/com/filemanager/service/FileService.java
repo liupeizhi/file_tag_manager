@@ -70,6 +70,11 @@ public class FileService {
     
     private FileProtocolService getProtocolService(ServerConfig server) {
         String protocol = server.getProtocol() != null ? server.getProtocol().toLowerCase() : "webdav";
+        
+        if (protocol.equals("http") || protocol.equals("https")) {
+            protocol = "webdav";
+        }
+        
         String beanName = protocol.equals("webdav") ? "webDavService" : protocol + "Service";
         FileProtocolService service = protocolServices.get(beanName);
         if (service == null) {
@@ -227,6 +232,18 @@ public class FileService {
             }
         } catch (Exception e) {
         }
+    }
+    
+    public List<FileDTO> getAllFilesRecursive(Long serverId, String path) {
+        ServerConfig server = getServer(serverId);
+        FileProtocolService service = getProtocolService(server);
+        
+        Map<String, FileResource> allResources = new HashMap<>();
+        collectResources(service, server, path, allResources);
+        
+        return allResources.values().stream()
+                .map(r -> toDTO(r, serverId))
+                .collect(Collectors.toList());
     }
     
     private void updateMetadataFromResource(FileMetadata metadata, FileResource resource) {

@@ -60,6 +60,8 @@ export function getFilesByTag(tagId) {
   return request.get(`/tags/${tagId}/files`)
 }
 
-export function getFilesByTagWithDetails(tagId) {
-  return request.get(`/tags/${tagId}/files/detail`)
+export function getFilesByTagWithDetails(tagId, serverId) {
+  return request.get(`/tags/${tagId}/files/detail`, {
+    params: { serverId }
+  })
 }

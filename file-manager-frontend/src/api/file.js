@@ -45,3 +45,7 @@ export function syncFiles(serverId, path = '/') {
     params: { serverId, path }
   })
 }
+
+export function exportDirectory(serverId, path = '/') {
+  return `/api/files/export?serverId=${serverId}&path=${encodeURIComponent(path)}`
+}

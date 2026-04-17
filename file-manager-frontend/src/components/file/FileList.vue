@@ -73,6 +73,11 @@
           <el-icon><Refresh /></el-icon>
           同步文件
         </el-button>
+        
+        <el-button @click="handleExport">
+          <el-icon><Download /></el-icon>
+          导出目录
+        </el-button>
       </div>
     </div>
     
@@ -375,7 +380,7 @@ import {
 } from '@element-plus/icons-vue'
 import { getFileTypeInfo, formatFileSize } from '@/utils/file-type'
 import { formatDate } from '@/utils/date-format'
-import { downloadFile, createFolder as createFolderApi, syncFiles } from '@/api/file'
+import { downloadFile, createFolder as createFolderApi, syncFiles, exportDirectory } from '@/api/file'
 import { getTagGroups, getFileTags as getFileTagsApi, setFileTags } from '@/api/tag'
 import FileUpload from './FileUpload.vue'
 
@@ -801,6 +806,12 @@ async function handleSync() {
   } finally {
     syncing.value = false
   }
+}
+
+function handleExport() {
+  if (!serverStore.currentServer) return
+  const url = exportDirectory(serverStore.currentServer.id, fileStore.currentPath || '/')
+  window.open(url, '_blank')
 }
 
 async function loadAllTags() {

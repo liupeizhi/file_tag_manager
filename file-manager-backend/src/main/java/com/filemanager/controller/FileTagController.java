@@ -98,7 +98,9 @@ public class FileTagController {
     }
     
     @GetMapping("/{tagId}/files/detail")
-    public ApiResponse<List<FileDTO>> getFilesByTagWithDetails(@PathVariable Long tagId) {
-        return ApiResponse.success(tagService.getFilesByTagWithDetails(tagId));
+    public ApiResponse<List<FileDTO>> getFilesByTagWithDetails(
+            @PathVariable Long tagId,
+            @RequestParam(required = false) Long serverId) {
+        return ApiResponse.success(tagService.getFilesByTagWithDetails(tagId, serverId));
     }
 }

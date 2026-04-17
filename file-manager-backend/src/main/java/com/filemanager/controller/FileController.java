@@ -2,6 +2,8 @@ package com.filemanager.controller;
 
 import com.filemanager.dto.ApiResponse;
 import com.filemanager.dto.FileDTO;
+import com.filemanager.entity.ServerConfig;
+import com.filemanager.repository.ServerConfigRepository;
 import com.filemanager.service.FileService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
@@ -24,6 +26,9 @@ public class FileController {
     
     @Autowired
     private FileService fileService;
+    
+    @Autowired
+    private ServerConfigRepository serverConfigRepository;
     
     @GetMapping("/tree")
     public ApiResponse<List<FileDTO>> getFileTree(
@@ -156,5 +161,49 @@ public class FileController {
             @RequestParam(defaultValue = "/") String path) {
         Map<String, Integer> result = fileService.syncFiles(serverId, path);
         return ApiResponse.success("同步成功", result);
+    }
+    
+    @GetMapping("/export")
+    public ResponseEntity<Resource> exportDirectory(
+            @RequestParam Long serverId,
+            @RequestParam(defaultValue = "/") String path) {
+        List<FileDTO> files = fileService.getAllFilesRecursive(serverId, path);
+        
+        ServerConfig server = serverConfigRepository.findById(serverId).orElse(null);
+        String baseUrl = server != null ? server.getUrl() : "";
+        
+        for (FileDTO file : files) {
+            if (file.getPath() != null && baseUrl != null && !baseUrl.isEmpty()) {
+                String filePath = file.getPath();
+                if (filePath.startsWith("/")) {
+                    file.setFullPath(baseUrl + filePath);
+                } else {
+                    file.setFullPath(baseUrl + "/" + filePath);
+                }
+            } else {
+                file.setFullPath(file.getPath());
+            }
+        }
+        
+        String jsonContent;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            mapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            mapper.enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT);
+            jsonContent = mapper.writeValueAsString(files);
+        } catch (Exception e) {
+            throw new RuntimeException("导出失败: " + e.getMessage());
+        }
+        
+        String filename = "directory_" + path.replace("/", "_").replaceAll("^_+$", "root") + ".json";
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8);
+        
+        InputStream stream = new java.io.ByteArrayInputStream(jsonContent.getBytes(StandardCharsets.UTF_8));
+        
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFilename + "\"")
+                .body(new InputStreamResource(stream));
     }
 }

@@ -8,6 +8,7 @@ public class FileDTO {
     private Long id;
     private Long serverId;
     private String path;
+    private String fullPath;
     private String name;
     private Boolean isDirectory;
     private Long size;

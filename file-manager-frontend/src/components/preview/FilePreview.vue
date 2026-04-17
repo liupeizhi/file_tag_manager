@@ -545,8 +545,7 @@ const navigatorIndicatorStyle = computed(() => {
 const imageStyle = computed(() => {
   const style = {
     userSelect: 'none',
-    WebkitUserDrag: 'none',
-    objectFit: 'contain'
+    WebkitUserDrag: 'none'
   }
   
   if (imageNaturalSize.value.width > 0 && imageNaturalSize.value.height > 0) {
@@ -559,6 +558,10 @@ const imageStyle = computed(() => {
       height: `${displayHeight}px`
     }
     
+    if (imageScale.value <= 1) {
+      result.objectFit = 'contain'
+    }
+    
     if (imageScale.value > 1) {
       result.cursor = isImageDragging.value ? 'grabbing' : 'grab'
     }
@@ -566,7 +569,10 @@ const imageStyle = computed(() => {
     return result
   }
   
-  return style
+  return {
+    ...style,
+    objectFit: 'contain'
+  }
 })
 
 function resetDialog() {
@@ -1524,6 +1530,9 @@ function handleKeyup(e) {
 
 .image-wrapper img {
   display: block;
+}
+
+.image-wrapper:not(.with-scroll) img {
   object-fit: contain;
 }
 
