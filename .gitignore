@@ -23,3 +23,9 @@ Thumbs.db
 # Memory/Context
 MEMORY/
 .claude-context.md
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
