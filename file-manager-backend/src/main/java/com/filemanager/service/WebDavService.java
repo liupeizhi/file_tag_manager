@@ -18,14 +18,17 @@ import java.util.stream.Collectors;
 
 @Service
 public class WebDavService implements FileProtocolService {
-    
+
+    private static final int CONNECT_TIMEOUT_MS = 10000;
+    private static final int SOCKET_TIMEOUT_MS = 30000;
+
     public Sardine createSardine(String username, String password) {
         System.setProperty("http.proxyHost", "");
         System.setProperty("http.proxyPort", "");
         System.setProperty("https.proxyHost", "");
         System.setProperty("https.proxyPort", "");
         System.setProperty("http.nonProxyHosts", "localhost|127.*|[::1]");
-        
+
         Sardine sardine = SardineFactory.begin(username, password);
         sardine.enablePreemptiveAuthentication("http");
         sardine.enablePreemptiveAuthentication("https");

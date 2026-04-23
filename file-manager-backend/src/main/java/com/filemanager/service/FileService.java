@@ -31,19 +31,21 @@ import java.util.stream.Collectors;
 
 @Service
 public class FileService {
-    
+
+    private static final int MAX_RECURSION_DEPTH = 20;
+
     @Autowired
     private ServerConfigRepository serverConfigRepository;
-    
+
     @Autowired
     private FileMetadataRepository fileMetadataRepository;
-    
+
     @Autowired
     private FileTagRelationRepository fileTagRelationRepository;
-    
+
     @Autowired
     private Map<String, FileProtocolService> protocolServices;
-    
+
     @Autowired
     private PasswordEncryptor passwordEncryptor;
     
@@ -219,19 +221,26 @@ public class FileService {
         return result;
     }
     
-    private void collectResources(FileProtocolService service, ServerConfig server, String path, Map<String, FileResource> allResources) {
+    private void collectResources(FileProtocolService service, ServerConfig server, String path, Map<String, FileResource> allResources, int currentDepth) {
+        if (currentDepth > MAX_RECURSION_DEPTH) {
+            return;
+        }
         try {
             List<FileResource> resources = service.listFiles(server, path);
             for (FileResource resource : resources) {
                 if (!resource.getPath().equals(path)) {
                     allResources.put(resource.getPath(), resource);
                     if (resource.isDirectory()) {
-                        collectResources(service, server, resource.getPath(), allResources);
+                        collectResources(service, server, resource.getPath(), allResources, currentDepth + 1);
                     }
                 }
             }
         } catch (Exception e) {
         }
+    }
+
+    private void collectResources(FileProtocolService service, ServerConfig server, String path, Map<String, FileResource> allResources) {
+        collectResources(service, server, path, allResources, 0);
     }
     
     public List<FileDTO> getAllFilesRecursive(Long serverId, String path) {

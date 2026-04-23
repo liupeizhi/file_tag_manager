@@ -5,6 +5,7 @@ import com.filemanager.dto.FileDTO;
 import com.filemanager.entity.ServerConfig;
 import com.filemanager.repository.ServerConfigRepository;
 import com.filemanager.service.FileService;
+import com.filemanager.util.PathValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -23,12 +24,15 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/files")
 public class FileController {
-    
+
     @Autowired
     private FileService fileService;
-    
+
     @Autowired
     private ServerConfigRepository serverConfigRepository;
+
+    @Autowired
+    private PathValidator pathValidator;
     
     @GetMapping("/tree")
     public ApiResponse<List<FileDTO>> getFileTree(
@@ -114,16 +118,20 @@ public class FileController {
                 .body(new InputStreamResource(stream));
     }
     
-    @PostMapping("/upload")
+@PostMapping("/upload")
     public ApiResponse<Void> uploadFile(
             @RequestParam Long serverId,
             @RequestParam String path,
             @RequestParam MultipartFile file) {
         try {
+            pathValidator.validatePath(path);
+            String filename = pathValidator.sanitizeFileName(file.getOriginalFilename());
             byte[] bytes = file.getBytes();
             java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(bytes);
-            fileService.uploadFile(serverId, path, file.getOriginalFilename(), bais);
+            fileService.uploadFile(serverId, path, filename, bais);
             return ApiResponse.success("上传成功", null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error("无效的路径: " + e.getMessage());
         } catch (Exception e) {
             e.printStackTrace();
             return ApiResponse.error("上传失败: " + e.getMessage());
@@ -135,24 +143,40 @@ public class FileController {
             @PathVariable Long serverId,
             @RequestParam String oldPath,
             @RequestParam String newPath) {
-        fileService.renameFile(serverId, oldPath, newPath);
-        return ApiResponse.success("重命名成功", null);
+        try {
+            pathValidator.validatePath(oldPath);
+            pathValidator.validatePath(newPath);
+            fileService.renameFile(serverId, oldPath, newPath);
+            return ApiResponse.success("重命名成功", null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error("无效的路径: " + e.getMessage());
+        }
     }
-    
+
     @DeleteMapping("/{serverId}")
     public ApiResponse<Void> deleteFile(
             @PathVariable Long serverId,
             @RequestParam String path) {
-        fileService.deleteFile(serverId, path);
-        return ApiResponse.success("删除成功", null);
+        try {
+            pathValidator.validatePath(path);
+            fileService.deleteFile(serverId, path);
+            return ApiResponse.success("删除成功", null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error("无效的路径: " + e.getMessage());
+        }
     }
-    
+
     @PostMapping("/create-folder")
     public ApiResponse<Void> createFolder(
             @RequestParam Long serverId,
             @RequestParam String path) {
-        fileService.createFolder(serverId, path);
-        return ApiResponse.success("创建成功", null);
+        try {
+            pathValidator.validatePath(path);
+            fileService.createFolder(serverId, path);
+            return ApiResponse.success("创建成功", null);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error("无效的路径: " + e.getMessage());
+        }
     }
     
     @PostMapping("/sync")

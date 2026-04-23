@@ -43,3 +43,10 @@ app:
     key: ${APP_ENCRYPTION_KEY:filemanager12345}
   scripts:
     path: ${APP_SCRIPTS_PATH:/Users/liupeizhi/code_lab/file_manager/scripts}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5183}
+  file:
+    max-recursion-depth: 20
+    path:
+      max-length: 4096
+      max-depth: 50

@@ -25,7 +25,7 @@ import java.util.Set;
 
 @Service
 public class SmbService implements FileProtocolService {
-    
+
     private static final int DEFAULT_PORT = 445;
     
     @Override
@@ -176,13 +176,14 @@ public class SmbService implements FileProtocolService {
     private Connection connect(ServerConfig server) throws IOException {
         SMBClient client = new SMBClient();
         int port = server.getPort() != null ? server.getPort() : DEFAULT_PORT;
-        
+
         Connection connection = client.connect(server.getHost(), port);
+
         AuthenticationContext ac = new AuthenticationContext(
                 server.getUsername(),
                 server.getPassword() != null ? server.getPassword().toCharArray() : new char[0],
                 server.getDomain() != null ? server.getDomain() : "");
-        
+
         connection.authenticate(ac);
         return connection;
     }
