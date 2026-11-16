@@ -6,8 +6,15 @@ import com.filemanager.dto.RegisterRequest;
 import com.filemanager.dto.UserDTO;
 import com.filemanager.entity.User;
 import com.filemanager.service.UserService;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -19,6 +26,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 public class AuthController {
 
+    @Value("${server.servlet.session.cookie.name:FILE_MANAGER_SESSION}")
+    private String sessionCookieName;
+
     private final AuthenticationManager authenticationManager;
     private final UserService userService;
 
@@ -28,7 +38,8 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ApiResponse<UserDTO> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    public ApiResponse<UserDTO> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest,
+                                      HttpServletResponse httpResponse) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
@@ -41,6 +52,15 @@ public class AuthController {
 
         if (Boolean.TRUE.equals(request.getRememberMe())) {
             session.setMaxInactiveInterval(30 * 24 * 60 * 60);
+            // 只延长服务端会话不够: 容器默认下发的会话 cookie 没有 Max-Age,
+            // 浏览器一关就没了。这里补一个同名、带 Max-Age 的 cookie,
+            // 让登录态能跨浏览器重启保留。
+            Cookie cookie = new Cookie(sessionCookieName, session.getId());
+            cookie.setPath("/");
+            cookie.setHttpOnly(true);
+            cookie.setMaxAge(30 * 24 * 60 * 60);
+            cookie.setAttribute("SameSite", "Lax");
+            httpResponse.addCookie(cookie);
         } else {
             session.setMaxInactiveInterval(7 * 24 * 60 * 60);
         }
@@ -71,18 +91,31 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<UserDTO> getCurrentUser() {
+    public ResponseEntity<ApiResponse<UserDTO>> getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ApiResponse.error("未登录");
+
+        // 匿名认证令牌在 Spring Security 里也算 "authenticated",
+        // 不单独判断的话, 退出登录后这里会拿着 "anonymousUser" 去查库,
+        // 结果是 500 "用户不存在" 而不是应有的 401。
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(401, "未登录"));
         }
 
         String username = authentication.getName();
-        User user = userService.findByUsername(username);
-        if (user == null) {
-            return ApiResponse.error("用户不存在");
+        if (username == null || username.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(401, "未登录"));
         }
 
-        return ApiResponse.success(userService.toDTO(user));
+        User user = userService.findByUsername(username);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(401, "用户不存在"));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success(userService.toDTO(user)));
     }
 }

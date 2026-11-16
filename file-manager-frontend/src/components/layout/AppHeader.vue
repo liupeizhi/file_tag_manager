@@ -1,13 +1,13 @@
 <template>
-  <div class="app-header glass-strong">
+  <div class="app-header">
     <div class="logo">
-      <el-icon size="24" :color="`var(--theme-primary)`"><FolderOpened /></el-icon>
+      <span class="logo-mark"><el-icon size="17"><FolderOpened /></el-icon></span>
       <span>文件标签浏览器</span>
     </div>
     
-    <div class="server-select">
+    <div class="header-actions">
       <ThemeSwitcher />
-      
+
       <div 
         v-if="serverStore.currentServer" 
         class="current-server"
@@ -34,6 +34,12 @@
           :value="server"
         />
       </el-select>
+
+      <el-tooltip content="主题设置" placement="bottom">
+        <el-button circle class="icon-button" @click="router.push('/theme')">
+          <el-icon :size="16"><Brush /></el-icon>
+        </el-button>
+      </el-tooltip>
       
       <el-dropdown
         v-if="userStore.isLoggedIn"
@@ -46,6 +52,12 @@
         </div>
         <template #dropdown>
           <el-dropdown-menu>
+            <el-dropdown-item
+              command="theme"
+              :icon="Brush"
+            >
+              主题设置
+            </el-dropdown-item>
             <el-dropdown-item
               command="admin"
               :icon="Setting"
@@ -80,7 +92,7 @@ import { useRouter } from 'vue-router'
 import { useServerStore } from '@/store/server'
 import { useUserStore } from '@/store/user'
 import { useFileStore } from '@/store/file'
-import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown, Switch } from '@element-plus/icons-vue'
+import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown, Switch, Brush } from '@element-plus/icons-vue'
 import ThemeSwitcher from '@/components/common/ThemeSwitcher.vue'
 
 const router = useRouter()
@@ -107,11 +119,15 @@ function handleServerChange(server) {
   }
 }
 
-function handleDropdownCommand(command) {
-  if (command === 'admin') {
+async function handleDropdownCommand(command) {
+  if (command === 'theme') {
+    router.push('/theme')
+  } else if (command === 'admin') {
     router.push('/admin/servers')
   } else if (command === 'logout') {
-    userStore.logout()
+    // 必须等登出完成再跳转: 否则路由守卫此时仍认为用户处于登录态,
+    // 会把 /login 又弹回首页, 表现为"退出后没跳转到登录页"
+    await userStore.logout()
     router.push('/login')
   }
 }
@@ -123,40 +139,68 @@ function goLogin() {
 
 <style scoped>
 .app-header {
-  height: 60px;
-  padding: 0 20px;
+  flex-shrink: 0;
+  height: 52px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   background: var(--theme-surface);
-  border-bottom: 1px solid var(--theme-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 18px;
+  gap: 9px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--theme-text);
 }
 
-.server-select {
+.logo-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-input);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
   display: flex;
-  gap: 12px;
   align-items: center;
+  justify-content: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.icon-button:hover {
+  border-color: var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .current-server {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent);
-  border-radius: 8px;
-  color: var(--theme-primary);
-  font-size: 14px;
+  padding: 5px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-input);
+  color: var(--text-secondary);
+  font-size: 13px;
   font-weight: 500;
   cursor: help;
   transition: all var(--transition-fast);
@@ -168,21 +212,20 @@ function goLogin() {
 }
 
 .current-server:hover {
-  background: color-mix(in srgb, var(--theme-primary) 15%, transparent);
-  border-color: var(--theme-primary);
-  transform: translateY(-1px);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
 }
 
 .user-info {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent);
-  border-radius: 8px;
-  color: var(--theme-primary);
-  font-size: 14px;
+  padding: 5px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-input);
+  color: var(--text-secondary);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -194,9 +237,8 @@ function goLogin() {
 }
 
 .user-info:hover {
-  background: color-mix(in srgb, var(--theme-primary) 15%, transparent);
-  border-color: var(--theme-primary);
-  transform: translateY(-1px);
+  border-color: var(--text-muted);
+  color: var(--text-primary);
 }
 
 .server-selector {
@@ -204,15 +246,16 @@ function goLogin() {
 }
 
 .server-selector :deep(.el-input__wrapper) {
-  background: color-mix(in srgb, var(--theme-primary) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--theme-primary) 30%, transparent);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-input);
   box-shadow: none;
   transition: all var(--transition-fast);
   padding: 0 12px;
 }
 
 .server-selector :deep(.el-input__wrapper:hover) {
-  border-color: var(--theme-primary);
+  border-color: var(--text-muted);
 }
 
 .server-selector :deep(.el-input__inner) {
@@ -220,8 +263,8 @@ function goLogin() {
 }
 
 .server-selector :deep(.el-input__prefix) {
-  color: var(--theme-primary);
-  font-size: 18px;
+  color: var(--text-secondary);
+  font-size: 16px;
 }
 
 .server-selector :deep(.el-select__suffix) {
@@ -230,6 +273,6 @@ function goLogin() {
 
 .dropdown-icon {
   font-size: 12px;
-  margin-left: 4px;
+  margin-left: 2px;
 }
 </style>
