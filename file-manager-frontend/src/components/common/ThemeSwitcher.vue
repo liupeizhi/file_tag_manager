@@ -1,7 +1,7 @@
 <template>
-  <el-tooltip :content="themeStore.isDark ? '切换到浅色模式' : '切换到深色模式'" placement="bottom">
-    <el-button circle class="theme-button" @click="themeStore.toggleTheme">
-      <el-icon :size="18">
+  <el-tooltip :content="tooltipText" placement="bottom">
+    <el-button circle class="theme-button icon-button" @click="cycle">
+      <el-icon :size="16">
         <Sunny v-if="themeStore.isDark" />
         <Moon v-else />
       </el-icon>
@@ -10,24 +10,41 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useThemeStore } from '@/store/theme'
 import { Sunny, Moon } from '@element-plus/icons-vue'
 
 const themeStore = useThemeStore()
+
+const tooltipText = computed(() => {
+  if (themeStore.brightness === 'system') return '跟随系统 (点击切换到深色)'
+  return themeStore.isDark ? '切换到浅色模式' : '切换到深色模式'
+})
+
+function cycle() {
+  if (themeStore.brightness === 'system') {
+    themeStore.setBrightness('dark')
+  } else if (themeStore.isDark) {
+    themeStore.setBrightness('light')
+  } else {
+    themeStore.setBrightness('system')
+  }
+}
 </script>
 
 <style scoped>
-.theme-button {
-  width: 36px;
-  height: 36px;
+.icon-button {
+  width: 32px;
+  height: 32px;
   padding: 0;
-  border: 1px solid var(--theme-border);
-  background: var(--theme-surface);
-  color: var(--theme-text);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
 }
 
-.theme-button:hover {
-  border-color: var(--theme-primary);
-  color: var(--theme-primary);
+.icon-button:hover {
+  border-color: var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 </style>

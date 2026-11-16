@@ -20,8 +20,9 @@ app.use(pinia)
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
 
-// 初始化主题
+// 初始化主题(本地偏好, 保证首屏无闪烁)
 const themeStore = useThemeStore(pinia)
-themeStore.loadTheme()
+themeStore.init()
+// 服务端主题在确认登录后由 userStore 拉取, 避免未鉴权时发起 403 请求
 
 app.mount('#app')

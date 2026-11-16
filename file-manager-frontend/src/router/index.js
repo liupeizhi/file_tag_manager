@@ -20,6 +20,11 @@ const routes = [
     component: () => import('@/views/Home.vue')
   },
   {
+    path: '/theme',
+    name: 'Theme',
+    component: () => import('@/views/ThemeView.vue')
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: () => import('@/views/Admin.vue'),

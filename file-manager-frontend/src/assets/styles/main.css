@@ -1,184 +1,542 @@
+/* ============================================================
+   设计令牌层 (Design Tokens)
+   风格基准: 灰阶墨水风 — 无彩色强调、用发丝线与字号建立层级
+   ============================================================ */
+
+:root {
+  /* 表面 */
+  --bg-primary: #fafafa;
+  --bg-secondary: #f0f0f0;
+  --bg-sidebar: #f5f5f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fafafa;
+  --bg-input: #ffffff;
+
+  /* 描边 */
+  --border-color: #e0e0e0;
+  --border-light: #ebebeb;
+
+  /* 文字 */
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+
+  /* 强调 —— 刻意采用灰阶, 不与内容抢注意力 */
+  --accent-primary: #1a1a1a;
+  --accent-hover: #333333;
+  --accent-muted: #888888;
+  --accent-contrast: #ffffff;
+  --text-on-accent: #ffffff;
+
+  /* 语义色 */
+  --success: #2e7d32;
+  --error: #c62828;
+  --warning: #f57f17;
+  --accent-info: #4a90d9;
+
+  /* 圆角 —— 卡片大, 控件小 */
+  --radius-card: 14px;
+  --radius-control: 8px;
+  --radius-input: 6px;
+  --radius-pill: 999px;
+
+  /* 阴影 —— 卡片浮起是唯一的层级手段 */
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow-popover: 0 4px 14px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08) inset;
+  --shadow-overlay: 0 8px 28px rgba(0, 0, 0, 0.08);
+
+  /* 排版 */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, 'SF Mono', Menlo, monospace;
+  --font-size-base: 14px;
+
+  /* 动效 —— 全站统一 150ms */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.15s ease;
+
+  /* 画布 —— 存在壁纸时转为半透明, 让壁纸透出来 */
+  --canvas-bg: var(--bg-primary);
+}
+
+/* ============================================================
+   深色模式基础令牌 —— 三层递进, 而非纯黑
+   ============================================================ */
+html.dark {
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #252525;
+  --bg-sidebar: #202020;
+  --bg-card: #2a2a2a;
+  --bg-card-hover: #333333;
+  --bg-input: #2a2a2a;
+
+  --border-color: #3a3a3a;
+  --border-light: #333333;
+
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --text-muted: #888888;
+
+  --accent-primary: #e0e0e0;
+  --accent-hover: #f5f5f5;
+  --accent-muted: #888888;
+  --accent-contrast: #1a1a1a;
+  --text-on-accent: #1a1a1a;
+
+  --success: #66bb6a;
+  --error: #ef5350;
+  --warning: #ffb74d;
+  --accent-info: #6ba3d6;
+}
+
+html.has-background {
+  --canvas-bg: color-mix(in srgb, var(--bg-primary) 78%, transparent);
+}
+
+/* ============================================================
+   旧变量别名 —— 保留既有组件写法, 统一指向新令牌
+   ============================================================ */
+:root {
+  --theme-primary: var(--accent-primary);
+  --theme-background: var(--canvas-bg);
+  --theme-surface: var(--bg-card);
+  --theme-border: var(--border-color);
+  --theme-text: var(--text-primary);
+  --theme-text-secondary: var(--text-secondary);
+  --theme-glass-border: var(--border-color);
+}
+
+/* ============================================================
+   Element Plus 变量映射 —— 让组件库继承新皮肤
+   ============================================================ */
+:root {
+  --el-color-primary: var(--accent-primary);
+  --el-color-primary-dark-2: var(--accent-hover);
+  --el-color-primary-light-3: color-mix(in srgb, var(--accent-primary) 70%, var(--accent-contrast));
+  --el-color-primary-light-5: color-mix(in srgb, var(--accent-primary) 50%, var(--accent-contrast));
+  --el-color-primary-light-7: color-mix(in srgb, var(--accent-primary) 30%, var(--accent-contrast));
+  --el-color-primary-light-8: color-mix(in srgb, var(--accent-primary) 20%, var(--accent-contrast));
+  --el-color-primary-light-9: color-mix(in srgb, var(--accent-primary) 10%, var(--accent-contrast));
+
+  --el-bg-color: var(--bg-card);
+  --el-bg-color-page: var(--bg-primary);
+  --el-bg-color-overlay: var(--bg-card);
+
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-primary);
+  --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: var(--text-muted);
+  --el-text-color-disabled: var(--text-muted);
+
+  --el-border-color: var(--border-color);
+  --el-border-color-light: var(--border-light);
+  --el-border-color-lighter: var(--border-light);
+  --el-border-color-extra-light: var(--border-light);
+  --el-border-color-dark: var(--border-color);
+  --el-border-color-hover: var(--text-muted);
+
+  --el-fill-color: var(--bg-secondary);
+  --el-fill-color-light: var(--bg-secondary);
+  --el-fill-color-lighter: var(--bg-primary);
+  --el-fill-color-extra-light: var(--bg-primary);
+  --el-fill-color-dark: var(--border-color);
+  --el-fill-color-darker: var(--border-color);
+  --el-fill-color-blank: var(--bg-card);
+
+  --el-border-radius-base: var(--radius-input);
+  --el-border-radius-small: 4px;
+
+  --el-box-shadow: var(--shadow-card);
+  --el-box-shadow-light: var(--shadow-overlay);
+  --el-box-shadow-lighter: var(--shadow-overlay);
+  --el-box-shadow-dark: var(--shadow-popover);
+
+  --el-font-family: var(--font-ui);
+  --el-font-size-base: var(--font-size-base);
+  --el-disabled-bg-color: var(--bg-secondary);
+
+  --el-color-success: var(--success);
+  --el-color-warning: var(--warning);
+  --el-color-danger: var(--error);
+  --el-color-info: var(--accent-info);
+}
+
+/* ============================================================
+   背景图层 —— 壁纸以低透明度浮在画布之上, 卡片保持不透明
+   ============================================================ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image: var(--app-background-image, none);
+  background-position: 50%;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-attachment: fixed;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+body.has-background::before,
+html.has-background body::before {
+  opacity: 0.3;
+}
+
+html.dark.has-background body::before {
+  opacity: 0.22;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   Comic 风格 —— 手绘质感变体
+   注意: 基础令牌由 CSS 提供, 行内样式只承载用户自定义项,
+   因此这里的覆盖不会被行内样式压掉。
+   ============================================================ */
+html.comic {
+  --font-ui: 'Comic Neue', 'ZCOOL KuaiLe', 'Zen Maru Gothic', 'Gaegu', cursive, sans-serif;
+  --border-color: #1a1a1a;
+  --border-light: #555555;
+  --comic-border-width: 2.5px;
+  --comic-shadow: 3px 3px 0px rgba(0, 0, 0, 0.15);
+}
+
+html.dark.comic {
+  --border-color: #666666;
+  --border-light: #555555;
+  --comic-shadow: 3px 3px 0px rgba(255, 255, 255, 0.08);
+}
+
+.comic .el-dialog,
+.comic .el-message-box {
+  box-shadow: var(--comic-shadow);
+}
+
+/* 漫画风格下的外壳卡片: 加粗描边 + 硬偏移阴影 */
+.comic .app-header,
+.comic .sidebar,
+.comic .file-list,
+.comic .admin-sidebar,
+.comic .admin-main,
+.comic .theme-shell,
+.comic .login-card,
+.comic .register-card {
+  border: var(--comic-border-width) solid var(--border-color);
+  box-shadow: var(--comic-shadow);
+}
+
+.comic .el-card,
+.comic .theme-card {
+  border-width: var(--comic-border-width);
+}
+
+/* ============================================================
+   基础重置
+   ============================================================ */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-:root {
-  --theme-primary: #007AFF;
-  --theme-background: #f5f7fa;
-  --theme-surface: #ffffff;
-  --theme-border: #e4e7ed;
-  --theme-text: #1d1d1f;
-  --theme-text-secondary: #606266;
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.3s ease;
+html,
+body,
+#app {
+  height: 100%;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: var(--theme-background);
-  min-height: 100vh;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   transition: background var(--transition-normal), color var(--transition-normal);
 }
 
 #app {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
   overflow: hidden;
 }
 
-/* 深色模式 */
-.dark-theme {
-  --theme-primary: #0A84FF;
-  --theme-background: #1a1a1a;
-  --theme-surface: #2d2d2d;
-  --theme-border: #3d3d3d;
-  --theme-text: #f5f5f7;
-  --theme-text-secondary: #a0a0a0;
+/* ============================================================
+   通用排版工具类
+   ============================================================ */
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.dark-theme body {
-  background: var(--theme-background);
-  color: var(--theme-text);
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
-/* Element Plus 组件覆盖 */
+/* ============================================================
+   Element Plus 组件覆写
+   ============================================================ */
+
+/* 按钮 —— 实心主按钮为近黑色, 取消 iOS 蓝 */
+.el-button {
+  border-radius: var(--radius-input);
+  font-weight: 500;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
 .el-button--primary {
-  background: var(--theme-primary) !important;
-  border-color: var(--theme-primary) !important;
+  --el-button-bg-color: var(--accent-primary);
+  --el-button-border-color: var(--accent-primary);
+  --el-button-hover-bg-color: var(--accent-hover);
+  --el-button-hover-border-color: var(--accent-hover);
+  --el-button-active-bg-color: var(--accent-hover);
+  --el-button-active-border-color: var(--accent-hover);
+  --el-button-text-color: var(--text-on-accent);
+  --el-button-hover-text-color: var(--text-on-accent);
+  --el-button-active-text-color: var(--text-on-accent);
 }
 
-.el-button--primary:hover {
-  background: color-mix(in srgb, var(--theme-primary) 85%, white) !important;
-  border-color: color-mix(in srgb, var(--theme-primary) 85%, white) !important;
+.el-button--default {
+  --el-button-bg-color: var(--bg-card);
+  --el-button-border-color: var(--border-color);
+  --el-button-text-color: var(--text-primary);
+  --el-button-hover-bg-color: var(--bg-secondary);
+  --el-button-hover-border-color: var(--text-muted);
+  --el-button-hover-text-color: var(--text-primary);
 }
 
-.el-input__wrapper {
-  background: var(--theme-surface) !important;
-  border: 1px solid var(--theme-border) !important;
-  box-shadow: none !important;
-  transition: all var(--transition-fast);
+/* 输入框 / 选择器 —— 1px 发丝线, 无阴影 */
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  background: var(--bg-input);
+  border-radius: var(--radius-input);
+  box-shadow: 0 0 0 1px var(--border-color) inset;
+  transition: box-shadow var(--transition-fast);
 }
 
-.el-input__wrapper:hover {
-  border-color: var(--theme-primary) !important;
+.el-input__wrapper:hover,
+.el-textarea__inner:hover,
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--text-muted) inset;
 }
 
-.el-input__wrapper.is-focus {
-  border-color: var(--theme-primary) !important;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-primary) 20%, transparent) !important;
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--accent-primary) inset;
 }
 
-.el-dialog {
-  background: var(--theme-surface) !important;
-  border: 1px solid var(--theme-border) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+.el-textarea__inner {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
 }
 
-.el-message-box {
-  background: var(--theme-surface) !important;
-  border: 1px solid var(--theme-border) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+/* 表格 —— 大写表头 + 发丝线分隔, 取消蓝色排序态 */
+.el-table {
+  --el-table-bg-color: var(--bg-card);
+  --el-table-tr-bg-color: var(--bg-card);
+  --el-table-header-bg-color: var(--bg-card);
+  --el-table-row-hover-bg-color: var(--bg-card-hover);
+  --el-table-border-color: var(--border-light);
+  --el-table-text-color: var(--text-primary);
+  --el-table-header-text-color: var(--text-secondary);
+  --el-table-header-bg-color: var(--bg-card);
+  font-size: 13px;
 }
 
-.el-dropdown-menu {
-  background: var(--theme-surface) !important;
-  border: 1px solid var(--theme-border) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+.el-table th.el-table__cell {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.el-select-dropdown {
-  background: var(--theme-surface) !important;
-  border: 1px solid var(--theme-border) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+.el-table td.el-table__cell {
+  border-bottom: 1px solid var(--border-light);
 }
 
-/* 深色模式 Element Plus 组件 */
-.dark-theme .el-input__inner {
-  color: var(--theme-text) !important;
+/* Element Plus 的排序箭头用边框三角形绘制, 不能加背景色(会变成实心方块) */
+.el-table .sort-caret.ascending {
+  border-bottom-color: var(--text-secondary);
+  border-bottom-width: 5px;
 }
 
-.dark-theme .el-select__placeholder {
-  color: var(--theme-text-secondary) !important;
+.el-table .sort-caret.descending {
+  border-top-color: var(--text-secondary);
+  border-top-width: 5px;
 }
 
-.dark-theme .el-table {
-  --el-table-bg-color: var(--theme-surface);
-  --el-table-tr-bg-color: var(--theme-surface);
-  --el-table-header-bg-color: #363636;
-  --el-table-row-hover-bg-color: #363636;
-  --el-table-text-color: var(--theme-text);
-  --el-table-header-text-color: var(--theme-text);
+.el-table__body tr.current-row > td.el-table__cell {
+  background: var(--bg-secondary) !important;
 }
 
-.dark-theme .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
-  background: rgba(255, 255, 255, 0.02);
+/* 标签页 —— 去掉粗下划线, 改为细灰条 */
+.el-tabs__header {
+  margin: 0;
 }
 
-.dark-theme .el-table th.el-table__cell {
-  background: #363636 !important;
+.el-tabs__nav-wrap::after {
+  background-color: var(--border-color);
+  height: 1px;
 }
 
-.dark-theme .el-input__wrapper {
-  background: #363636 !important;
+.el-tabs__item {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
 }
 
-.dark-theme .el-breadcrumb__inner,
-.dark-theme .el-breadcrumb__separator {
-  color: var(--theme-text);
+.el-tabs__item:hover {
+  color: var(--text-primary);
 }
 
-.dark-theme .el-checkbox__label {
-  color: var(--theme-text);
+.el-tabs__item.is-active {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
-.dark-theme .el-dialog__title {
-  color: var(--theme-text);
+.el-tabs__active-bar {
+  background-color: var(--accent-primary);
+  height: 2px;
 }
 
-.dark-theme .el-tabs__item {
-  color: var(--theme-text-secondary);
-}
-
-.dark-theme .el-tabs__item.is-active {
-  color: var(--theme-primary);
-}
-
-.dark-theme .el-text {
-  color: var(--theme-text);
-}
-
-.dark-theme .el-descriptions__label {
-  color: var(--theme-text-secondary);
-}
-
-.dark-theme .el-descriptions__content {
-  color: var(--theme-text);
-}
-
-.dark-theme .el-tree {
+/* 树 —— 无高亮色块, 用浅灰底表达选中 */
+.el-tree {
   background: transparent;
-  color: var(--theme-text);
+  color: var(--text-primary);
+  --el-tree-node-hover-bg-color: var(--bg-secondary);
 }
 
-.dark-theme .el-tree-node__content:hover {
-  background-color: rgba(255, 255, 255, 0.08);
+.el-tree-node__content {
+  height: 30px;
+  border-radius: var(--radius-input);
 }
 
-.dark-theme .el-tree-node.is-current > .el-tree-node__content {
-  background-color: rgba(10, 132, 255, 0.2);
+.el-tree-node.is-current > .el-tree-node__content {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
-.dark-theme .el-empty__description {
-  color: var(--theme-text-secondary);
+/* 弹层 —— 14px 圆角 + 柔和阴影 */
+.el-dialog,
+.el-message-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-popover);
 }
 
-/* 滚动条样式 */
+.el-dialog__title,
+.el-message-box__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.el-dialog__body,
+.el-message-box__content {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.el-dialog__footer {
+  border-top: 1px solid var(--border-light);
+  padding-top: 16px;
+}
+
+.el-dropdown-menu,
+.el-select-dropdown,
+.el-popper.is-light {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-popover);
+}
+
+.el-dropdown-menu__item {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.el-dropdown-menu__item:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.el-dropdown-menu__item--divided {
+  border-color: var(--border-light);
+}
+
+/* 徽章 —— 描边胶囊, 不再实心高饱和 */
+.el-tag {
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+  border-width: 1px;
+}
+
+/* 其他 */
+.el-empty__description p {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.el-breadcrumb__inner,
+.el-breadcrumb__separator {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.el-descriptions__label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.el-descriptions__content {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.el-checkbox__label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.el-pagination {
+  --el-pagination-text-color: var(--text-secondary);
+  --el-pagination-button-disabled-bg-color: var(--bg-secondary);
+  font-size: 13px;
+}
+
+.el-upload-dragger {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  border-radius: var(--radius-card);
+}
+
+.el-upload-dragger:hover {
+  border-color: var(--text-muted);
+}
+
+/* ============================================================
+   滚动条
+   ============================================================ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -189,23 +547,17 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c0c4cc;
+  background: #c0c0c0;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #909399;
+  background: #a0a0a0;
 }
 
-.dark-theme ::-webkit-scrollbar-thumb {
-  background: #4a4a4a;
-}
-
-.dark-theme ::-webkit-scrollbar-thumb:hover {
-  background: #5a5a5a;
-}
-
-/* 动画 */
+/* ============================================================
+   动画
+   ============================================================ */
 @keyframes fadeIn {
   from {
     opacity: 0;

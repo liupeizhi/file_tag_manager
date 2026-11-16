@@ -194,22 +194,29 @@ const goToLogin = () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  background: var(--canvas-bg);
 }
 
 .register-card {
   width: 400px;
   max-width: 90%;
+  background: var(--theme-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 40px;
 }
 
 .card-header {
   text-align: center;
+  margin-bottom: 24px;
 }
 
 .card-header h2 {
   margin: 0;
-  font-size: 24px;
-  color: #303133;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--theme-text);
 }
 
 .register-footer {

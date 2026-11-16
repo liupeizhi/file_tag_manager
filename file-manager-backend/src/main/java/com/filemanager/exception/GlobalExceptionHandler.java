@@ -20,6 +20,12 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(e.getMessage());
     }
     
+    @ExceptionHandler(ThemeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleThemeException(ThemeException e) {
+        return ApiResponse.error(400, e.getMessage());
+    }
+
     @ExceptionHandler(ClientAbortException.class)
     public void handleClientAbortException(ClientAbortException e) {
     }

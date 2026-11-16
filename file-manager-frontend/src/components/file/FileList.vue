@@ -1020,21 +1020,20 @@ defineExpose({
 <style scoped>
 .file-list {
   background: var(--theme-surface);
-  border: 1px solid var(--theme-border);
-  border-radius: 12px;
+  border-radius: var(--radius-card);
   padding: 20px;
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-card);
 }
 
 .list-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
   flex-shrink: 0;
 }
 
@@ -1105,6 +1104,7 @@ defineExpose({
   display: flex;
   align-items: center;
   overflow: hidden;
+  min-height: 22px;
 }
 
 .current-path :deep(.el-breadcrumb) {
@@ -1112,6 +1112,13 @@ defineExpose({
   align-items: center;
   flex-wrap: nowrap;
   overflow: hidden;
+  /* Element Plus 默认 line-height:1, 中文字形会被父级 overflow 截断顶部 */
+  line-height: 1.6;
+}
+
+.current-path :deep(.el-breadcrumb__item),
+.current-path :deep(.el-breadcrumb__inner) {
+  line-height: 1.6;
 }
 
 .current-path :deep(.el-breadcrumb__item) {
@@ -1155,6 +1162,8 @@ defineExpose({
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 :deep(.folder-row) {

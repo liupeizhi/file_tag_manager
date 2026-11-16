@@ -142,22 +142,27 @@ onUnmounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--theme-background);
+  gap: 12px;
+  padding: 12px;
+  background: var(--canvas-bg);
   transition: background var(--transition-normal);
 }
 
 .main-content {
   flex: 1;
   display: flex;
+  gap: 12px;
   overflow: hidden;
   position: relative;
+  min-height: 0;
 }
 
 .sidebar-wrapper {
   position: relative;
   flex-shrink: 0;
-  transition: width 0.3s ease;
+  transition: width 0.15s ease;
   display: flex;
+  min-height: 0;
 }
 
 .sidebar {
@@ -167,7 +172,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: var(--theme-surface);
-  border-right: 1px solid var(--theme-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
 }
 
 .sidebar-tabs {
@@ -180,7 +186,6 @@ onUnmounted(() => {
   margin: 0;
   padding: 0 16px;
   background: transparent;
-  border-bottom: 1px solid var(--theme-glass-border);
 }
 
 :deep(.el-tabs__content) {
@@ -198,7 +203,7 @@ onUnmounted(() => {
   background: transparent;
   cursor: col-resize;
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: background 0.15s;
   position: relative;
 }
 
@@ -216,46 +221,60 @@ onUnmounted(() => {
   right: -5px;
 }
 
+/*
+ * 折叠按钮: 垂直居中于内容区, 右半部分压在 content 卡片下方,
+ * 图标左移 2px 以避开被卡片遮挡的区域。
+ * z-index 介于 resize-handle(0) 与 content(2) 之间 —— 保证可点击但被卡片压住。
+ */
 .collapse-btn {
-  width: 20px;
-  height: 48px;
+  width: 24px;
+  height: 24px;
   background: var(--theme-surface);
   border: 1px solid var(--theme-border);
-  border-radius: 0 12px 12px 0;
+  border-radius: var(--radius-input);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-right: 4px;
   cursor: pointer;
   position: absolute;
-  right: -20px;
+  right: -16px;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 100;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.08);
-  color: var(--theme-text);
-  transition: all var(--transition-fast);
+  z-index: 1;
+  color: var(--text-muted);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .collapse-btn:hover {
-  border-color: var(--theme-primary);
-  color: var(--theme-primary);
-  transform: translateY(-50%) scale(1.05);
+  border-color: var(--text-primary);
+  color: var(--text-primary);
 }
 
 .collapsed-btn {
-  left: 0;
+  /* 右移一点, 避免按钮被视口左边缘切掉 */
+  left: -6px;
   right: auto;
-  border-radius: 0 12px 12px 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  padding-right: 0;
+  border-radius: var(--radius-input);
+  position: absolute;
+  /* 折叠态下按钮完全落在 content 卡片上, 需高于 content(2) 才不会被盖住 */
+  z-index: 3;
 }
 
 .content {
   flex: 1;
   overflow: hidden;
-  padding: 20px;
-  background: transparent;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* 建立独立层级, 使折叠按钮压在 content 卡片下方 */
+  position: relative;
+  z-index: 2;
 }
 
 .content > * {
