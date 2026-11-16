@@ -43,6 +43,10 @@ app:
     key: ${APP_ENCRYPTION_KEY:filemanager12345}
   scripts:
     path: ${APP_SCRIPTS_PATH:/Users/liupeizhi/code_lab/file_manager/scripts}
+  webdav:
+    # 自签名证书白名单(SHA-256 指纹)。证书链仍按 JDK 信任库校验,
+    # 仅这些指纹在主机名校验失败时被放行。多个用逗号分隔。
+    pinned-certificates: ${WEBDAV_PINNED_CERTIFICATES:A3:6F:0A:D3:E7:6D:07:AA:B9:E0:DA:9F:EE:C3:05:D8:4A:8C:14:22:7C:20:A7:E4:F5:4F:01:B4:AA:F9:A4:72}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5183}
   file:

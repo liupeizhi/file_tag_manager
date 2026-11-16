@@ -6,11 +6,13 @@ import com.filemanager.entity.ServerConfig;
 import com.filemanager.repository.ServerConfigRepository;
 import com.filemanager.service.FileService;
 import com.filemanager.util.PathValidator;
+import com.filemanager.util.RangedResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -60,16 +62,15 @@ public class FileController {
     @GetMapping("/{serverId}/download")
     public ResponseEntity<Resource> downloadFile(
             @PathVariable Long serverId,
-            @RequestParam String path) {
-        InputStream stream = fileService.downloadFile(serverId, path);
-        
+            @RequestParam String path,
+            @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader) {
         String filename = path.substring(path.lastIndexOf('/') + 1);
         String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8);
         String extension = path.toLowerCase();
-        
+
         String mimeType = "application/octet-stream";
         String disposition = "attachment";
-        
+
         if (extension.endsWith(".wav")) {
             mimeType = "audio/wav";
             disposition = "inline";
@@ -106,37 +107,46 @@ public class FileController {
         } else if (extension.endsWith(".avi")) {
             mimeType = "video/x-msvideo";
             disposition = "inline";
+        } else if (extension.endsWith(".flv")) {
+            mimeType = "video/x-flv";
+            disposition = "inline";
+        } else if (extension.endsWith(".wmv")) {
+            mimeType = "video/x-ms-wmv";
+            disposition = "inline";
         } else if (extension.endsWith(".pdf")) {
             mimeType = "application/pdf";
             disposition = "inline";
+        } else if (extension.endsWith(".jpg") || extension.endsWith(".jpeg")) {
+            mimeType = "image/jpeg";
+            disposition = "inline";
+        } else if (extension.endsWith(".png")) {
+            mimeType = "image/png";
+            disposition = "inline";
+        } else if (extension.endsWith(".gif")) {
+            mimeType = "image/gif";
+            disposition = "inline";
+        } else if (extension.endsWith(".webp")) {
+            mimeType = "image/webp";
+            disposition = "inline";
+        } else if (extension.endsWith(".svg")) {
+            mimeType = "image/svg+xml";
+            disposition = "inline";
         }
-        
-        return ResponseEntity.ok()
-                .contentType(MediaType.valueOf(mimeType))
-                .header(HttpHeaders.CONTENT_DISPOSITION, 
-                        disposition + "; filename=\"" + encodedFilename + "\"")
-                .body(new InputStreamResource(stream));
+
+        Long totalSize = fileService.getFileSize(serverId, path);
+        Long[] range = RangedResponse.parseRange(rangeHeader, totalSize);
+
+        return RangedResponse.build(
+                rangeHeader,
+                totalSize,
+                MediaType.valueOf(mimeType),
+                disposition,
+                encodedFilename,
+                () -> range != null
+                        ? fileService.downloadFile(serverId, path, range[0], range[1])
+                        : fileService.downloadFile(serverId, path));
     }
-    
-@PostMapping("/upload")
-    public ApiResponse<Void> uploadFile(
-            @RequestParam Long serverId,
-            @RequestParam String path,
-            @RequestParam MultipartFile file) {
-        try {
-            pathValidator.validatePath(path);
-            String filename = pathValidator.sanitizeFileName(file.getOriginalFilename());
-            byte[] bytes = file.getBytes();
-            java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(bytes);
-            fileService.uploadFile(serverId, path, filename, bais);
-            return ApiResponse.success("上传成功", null);
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error("无效的路径: " + e.getMessage());
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ApiResponse.error("上传失败: " + e.getMessage());
-        }
-    }
+
     
     @PutMapping("/{serverId}/rename")
     public ApiResponse<Void> renameFile(

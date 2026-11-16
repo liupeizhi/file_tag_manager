@@ -326,6 +326,34 @@ public class FileService {
         FileProtocolService service = getProtocolService(server);
         return service.downloadFile(server, path);
     }
+
+    /**
+     * 按区间下载, 用于支持 Range 的协议(WebDAV)。
+     */
+    public InputStream downloadFile(Long serverId, String path, Long start, Long end) {
+        ServerConfig server = getServer(serverId);
+        FileProtocolService service = getProtocolService(server);
+        return service.downloadFile(server, path, start, end);
+    }
+
+    /**
+     * 获取文件大小(字节)。优先用本地元数据缓存, 缺失时回源查询。
+     */
+    public Long getFileSize(Long serverId, String path) {
+        try {
+            FileMetadata metadata = getOrCreateMetadata(serverId, path);
+            return metadata.getSize();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 获取文件元数据(大小、修改时间等), 用于缓存键计算。
+     */
+    public FileMetadata getMetadata(Long serverId, String path) {
+        return getOrCreateMetadata(serverId, path);
+    }
     
     @Transactional
     public void renameFile(Long serverId, String oldPath, String newPath) {

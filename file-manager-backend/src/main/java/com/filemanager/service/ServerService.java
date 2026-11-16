@@ -126,8 +126,16 @@ public class ServerService {
     }
     
     private FileProtocolService getProtocolService(String protocol) {
-        String beanName = protocol.equals("webdav") ? "webDavService" : protocol + "Service";
-        return protocolServices.get(beanName);
+        String normalized = protocol != null ? protocol.toLowerCase() : "webdav";
+        if (normalized.equals("http") || normalized.equals("https")) {
+            normalized = "webdav";
+        }
+        String beanName = normalized.equals("webdav") ? "webDavService" : normalized + "Service";
+        FileProtocolService service = protocolServices.get(beanName);
+        if (service == null) {
+            throw new RuntimeException("不支持的协议类型: " + normalized);
+        }
+        return service;
     }
     
     private User getCurrentUser() {
