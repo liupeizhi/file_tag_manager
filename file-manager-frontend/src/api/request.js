@@ -16,7 +16,10 @@ request.interceptors.response.use(
     return res.data
   },
   error => {
-    ElMessage.error(error.message || '网络错误')
+    // 优先展示后端返回的详细原因(如 "Connect to 127.0.0.1:8181 failed: Connection refused"),
+    // 否则用户只会看到无信息量的 "Request failed with status code 500"
+    const message = error.response?.data?.message || error.message || '网络错误'
+    ElMessage.error(message)
     return Promise.reject(error)
   }
 )

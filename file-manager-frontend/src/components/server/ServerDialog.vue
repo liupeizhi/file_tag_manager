@@ -210,17 +210,23 @@ async function handleTest() {
   testing.value = true
   try {
     const data = prepareFormData()
+    let ok = false
     if (isEdit.value) {
-      await serverStore.test(props.server.id)
+      ok = await serverStore.test(props.server.id)
     } else {
       const result = await serverStore.add(data)
       if (result) {
-        ElMessage.success('连接测试成功')
+        ok = await serverStore.test(result.id)
       }
     }
-    ElMessage.success('连接测试成功')
+    // 接口用 data 布尔值表示连接结果, 必须判断, 不能一律当成功
+    if (ok) {
+      ElMessage.success('连接测试成功')
+    } else {
+      ElMessage.warning('连接失败, 请检查地址、端口与账号密码')
+    }
   } catch (error) {
-    ElMessage.error('连接失败: ' + error.message)
+    ElMessage.error('连接失败: ' + (error.message || '未知错误'))
   } finally {
     testing.value = false
   }

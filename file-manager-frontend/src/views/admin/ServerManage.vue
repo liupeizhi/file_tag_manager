@@ -355,8 +355,12 @@ async function submitForm() {
 
 async function testConnection(server) {
   try {
-    await testServerConnection(server.id)
-    ElMessage.success('连接成功')
+    const ok = await testServerConnection(server.id)
+    if (ok) {
+      ElMessage.success('连接成功')
+    } else {
+      ElMessage.warning('连接失败, 请检查地址、端口与账号密码')
+    }
   } catch (error) {
     ElMessage.error('连接失败: ' + (error.message || '未知错误'))
   }
@@ -370,13 +374,21 @@ async function testFromDialog() {
     const data = prepareFormData()
     
     if (isEdit.value) {
-      await testServerConnection(form.id)
-      ElMessage.success('连接成功')
+      const ok = await testServerConnection(form.id)
+      if (ok) {
+        ElMessage.success('连接成功')
+      } else {
+        ElMessage.warning('连接失败, 请检查地址、端口与账号密码')
+      }
     } else {
       const result = await addServer(data)
       if (result) {
-        await testServerConnection(result.id)
-        ElMessage.success('连接成功')
+        const ok = await testServerConnection(result.id)
+        if (ok) {
+          ElMessage.success('连接成功')
+        } else {
+          ElMessage.warning('服务器已添加, 但连接失败, 请检查地址、端口与账号密码')
+        }
       }
     }
   } catch (error) {
@@ -439,6 +451,8 @@ function getServerAddress(server) {
 <style scoped>
 .server-manage {
   padding: 24px;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .page-header {
@@ -450,7 +464,8 @@ function getServerAddress(server) {
 
 .page-header h2 {
   margin: 0;
-  font-size: 20px;
-  color: #303133;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text);
 }
 </style>

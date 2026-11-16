@@ -343,6 +343,8 @@ function formatDate(dateString) {
 <style scoped>
 .user-manage {
   padding: 20px;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .manage-header {
@@ -354,7 +356,9 @@ function formatDate(dateString) {
 
 .manage-header h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--theme-text);
 }
 
 .header-actions {
