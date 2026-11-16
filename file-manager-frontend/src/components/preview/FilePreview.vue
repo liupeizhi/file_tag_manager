@@ -126,16 +126,33 @@
                   </div>
                   <div class="video-content">
                     <div class="video-main">
-                      <video ref="videoRef" 
-                             controls 
+                      <div v-if="isConvertingVideo" class="video-converting">
+                        <el-icon class="is-loading" :size="28"><Loading /></el-icon>
+                        <p class="video-converting-title">正在转换为 MP4 以便预览</p>
+                        <p class="video-converting-desc">
+                          该格式（{{ currentVideoExt.toUpperCase() }}）浏览器无法直接播放，
+                          首次预览需要服务端转码，之后会直接使用缓存。
+                        </p>
+                      </div>
+                      <video v-show="!isConvertingVideo"
+                             ref="videoRef"
+                             controls
                              :src="previewUrl"
-                             @error="onError('视频加载失败')"
+                             @error="onVideoError"
                              @play="onVideoPlay"
                              @pause="onVideoPause"
                              @loadedmetadata="onVideoLoaded"
                              @timeupdate="onVideoTimeUpdate">
                         您的浏览器不支持视频播放
                       </video>
+                      <div v-if="videoErrorHint" class="video-error-hint">
+                        <el-icon :size="16"><WarningFilled /></el-icon>
+                        <div>
+                          <p class="video-error-title">{{ videoErrorHint.title }}</p>
+                          <p class="video-error-desc">{{ videoErrorHint.desc }}</p>
+                        </div>
+                        <el-button size="small" @click="download">下载文件</el-button>
+                      </div>
                     </div>
                     <div v-if="showVideoPlaylist && videoFiles.length > 1" class="video-playlist">
                       <div class="playlist-header">播放列表</div>
@@ -372,6 +389,7 @@ const emit = defineEmits(['update:modelValue', 'fileChange'])
 const visible = ref(false)
 const loading = ref(false)
 const error = ref('')
+const videoErrorHint = ref(null)
 const textContent = ref('')
 const renderedMarkdown = ref('')
 const highlightedCode = ref('')
@@ -501,12 +519,17 @@ const hasNextVideo = computed(() => currentVideoIndex.value >= 0 && currentVideo
 
 const previewUrl = computed(() => {
   if (!props.file || !props.serverId) return ''
-  
-  // For audio and video, use download endpoint which is more reliable
-  if (fileType.value === 'audio' || fileType.value === 'video') {
+
+  // 视频统一走 preview 端点: 后端判断是否需要转码(AVI/RMVB 等浏览器无法解封装)
+  if (fileType.value === 'video') {
+    return `/api/preview/${props.serverId}/video?path=${encodeURIComponent(props.file.path)}`
+  }
+
+  // 音频使用 download 端点, 更可靠
+  if (fileType.value === 'audio') {
     return `/api/files/${props.serverId}/download?path=${encodeURIComponent(props.file.path)}`
   }
-  
+
   const endpoints = {
     image: 'image', pdf: 'pdf', text: 'text', code: 'text',
     markdown: 'text', epub: 'ebook', document: 'document'
@@ -587,7 +610,8 @@ function formatSize(size) {
 async function loadPreview() {
   loading.value = true
   error.value = ''
-  
+  videoErrorHint.value = null
+
   try {
     if (['text', 'code', 'markdown'].includes(fileType.value)) {
       const res = await fetch(previewUrl.value)
@@ -637,7 +661,11 @@ async function loadPreview() {
     }
     
     await nextTick()
-    if (videoRef.value) videoRef.value.load()
+    if (videoRef.value) {
+      // 需要转码的容器: 先展示转换提示, 等待 loadedmetadata 后隐藏
+      isConvertingVideo.value = CONVERT_REQUIRED_VIDEO.includes(currentVideoExt.value)
+      videoRef.value.load()
+    }
     if (audioRef.value) audioRef.value.load()
   } catch (e) {
     error.value = e.message || '加载失败'
@@ -892,6 +920,56 @@ function onVideoLoaded() {
     videoRef.value.playbackRate = videoPlaybackRate.value
     videoRef.value.volume = videoVolume.value
   }
+  videoErrorHint.value = null
+  isConvertingVideo.value = false
+}
+
+/**
+ * 需要服务端转码的容器格式 —— 浏览器连解复用器都没有。
+ */
+const CONVERT_REQUIRED_VIDEO = ['avi', 'rm', 'rmvb', 'wmv', 'asf', 'flv', 'mov', 'qt',
+  'vob', 'm4v', 'mpg', 'mpeg', 'mpe', '3gp', 'ogv', 'f4v', 'divx', 'dat']
+
+const currentVideoExt = computed(() =>
+  (props.file?.name || '').split('.').pop()?.toLowerCase() || '')
+
+const isConvertingVideo = ref(false)
+
+/**
+ * 视频播放失败时区分两类原因:
+ * 1) 浏览器没有该容器的解复用器 (AVI/RMVB/WMV/FLV/MOV 等) —— 传输没问题, 是浏览器能力限制
+ * 2) 网络或解码中断 —— 多半是文件传输中断
+ */
+function onVideoError(event) {
+  const err = event?.target?.error
+  const code = err?.code
+  isConvertingVideo.value = false
+
+  if (code === 4 || code === undefined) {
+    if (CONVERT_REQUIRED_VIDEO.includes(currentVideoExt.value)) {
+      videoErrorHint.value = {
+        title: `浏览器无法解码 ${currentVideoExt.value.toUpperCase()} 视频`,
+        desc: 'AVI 等封装格式不在浏览器原生支持范围内（与文件传输无关），请下载后使用专业播放器打开，或转码为 MP4(H.264) 后预览。'
+      }
+    } else {
+      videoErrorHint.value = {
+        title: '视频加载失败',
+        desc: '浏览器无法解码该视频的编码格式，建议下载后使用专业播放器打开。'
+      }
+    }
+  } else if (code === 3) {
+    videoErrorHint.value = {
+      title: '视频解码出错',
+      desc: '文件可能已损坏或编码不完整，建议重新下载后重试。'
+    }
+  } else {
+    videoErrorHint.value = {
+      title: '视频加载失败',
+      desc: '网络传输中断或文件不可读，请检查连接后重试。'
+    }
+  }
+
+  loading.value = false
 }
 
 function onVideoTimeUpdate() {
@@ -1425,8 +1503,10 @@ function handleKeyup(e) {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: var(--el-color-primary);
-  color: #fff;
+  /* 强调色在暗色模式下是浅灰, 用作背景会导致标题看不清 —— 改用卡片表面 + 发丝线分隔 */
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
   cursor: move;
   user-select: none;
   flex-shrink: 0;
@@ -1435,6 +1515,7 @@ function handleKeyup(e) {
 .dialog-title {
   font-size: 14px;
   font-weight: 500;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1446,7 +1527,11 @@ function handleKeyup(e) {
 }
 
 .dialog-controls .el-button {
-  color: #fff;
+  color: var(--text-secondary);
+}
+
+.dialog-controls .el-button:hover {
+  color: var(--text-primary);
 }
 
 .dialog-body {
@@ -1605,8 +1690,66 @@ function handleKeyup(e) {
 .video-main {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
+}
+
+.video-error-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 520px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-control);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.video-converting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 460px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.video-converting-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.video-converting-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.video-error-hint .el-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--warning);
+}
+
+.video-error-title {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.video-error-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .video-main video {

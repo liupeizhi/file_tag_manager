@@ -50,6 +50,12 @@ app:
   theme:
     # 用户自定义背景图的存放目录
     background-path: ${APP_THEME_BACKGROUND_PATH:${user.home}/.file-manager/backgrounds}
+  video:
+    # 浏览器无法原生解码的容器(AVI/RMVB/WMV/FLV/MOV 等)需要服务端转码为 MP4
+    ffmpeg-path: ${APP_VIDEO_FFMPEG_PATH:ffmpeg}
+    cache-path: ${APP_VIDEO_CACHE_PATH:${user.home}/.file-manager/video-cache}
+    max-convert-seconds: ${APP_VIDEO_MAX_CONVERT_SECONDS:300}
+    max-size-bytes: ${APP_VIDEO_MAX_SIZE_BYTES:2147483648}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5183}
   file:
