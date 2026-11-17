@@ -114,6 +114,7 @@
         @selection-change="handleSelectionChange"
         :row-class-name="getRowClassName"
         style="width: 100%"
+        border
         :height="isTagFilterMode && totalTagFilteredFiles > 0 ? 'calc(100% - 60px)' : '100%'"
       >
       <el-table-column type="selection" width="55" />
@@ -177,7 +178,13 @@
         </template>
       </el-table-column>
       
-      <el-table-column label="收藏" width="70" align="center">
+      <el-table-column
+        label="收藏"
+        width="56"
+        align="center"
+        class-name="favorite-cell"
+        label-class-name="favorite-cell"
+      >
         <template #default="{ row }">
           <el-tooltip
             :content="isFavorited(row) ? '取消收藏' : '收藏'"
@@ -1325,14 +1332,24 @@ defineExpose({
 }
 
 .heart-btn {
+  display: block;
+  margin: 0 auto;
   width: 16px;
   height: 16px;
   fill: none;
-  stroke: var(--text-muted);
+  /* 未收藏态用 secondary 而非 muted: muted 在浅色/自定义主题下几乎看不见 */
+  stroke: var(--text-secondary);
   stroke-width: 2;
   cursor: pointer;
   transition: fill var(--transition-fast), stroke var(--transition-fast),
     transform var(--transition-fast);
+}
+
+/* 收藏列只放一个图标, 收窄内边距让宽度贴合心形 */
+:deep(.favorite-cell .cell) {
+  padding: 0 4px;
+  display: flex;
+  justify-content: center;
 }
 
 .heart-btn:hover {
