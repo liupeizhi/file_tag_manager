@@ -175,24 +175,21 @@ bun run dev  # 或 npm run dev
 想把本机某个目录当作 WebDAV 服务器挂进应用（例如让「服务器」列表里指向
 `127.0.0.1:8181` 的配置可用），可用 [WsgiDAV](https://github.com/mar10/wsgidav)。
 
-### 一次性准备
-
-```bash
-mkdir -p ~/.file-manager/webdav && cd ~/.file-manager/webdav
-uv venv .venv
-uv pip install --python .venv/bin/python wsgidav cheroot
-```
+脚本位于 `scripts/dev-webdav/`，共享目录与账号在 `wsgidav.yaml` 里配置。
+虚拟环境自动创建在 `~/.file-manager/webdav/.venv`（不入库）。
 
 ### 日常启停
 
 ```bash
-~/.file-manager/webdav/start.sh              # 使用 wsgidav.yaml 里的共享目录
-~/.file-manager/webdav/start.sh ~/Documents  # 临时改共享目录
-~/.file-manager/webdav/stop.sh
+./scripts/dev-webdav/start.sh                # 共享 ~/Downloads
+./scripts/dev-webdav/start.sh ~/Documents    # 换共享目录(会重启实例)
+./scripts/dev-webdav/stop.sh
 ```
 
+首次运行会自动创建虚拟环境并安装 `wsgidav` + `cheroot`。
+
 默认监听 `127.0.0.1:8181`（仅本机可访问），账号 `admin` / `admin`，
-共享目录 `~/Downloads`。改这两项编辑 `~/.file-manager/webdav/wsgidav.yaml`。
+共享目录 `~/Downloads`；改这两项编辑 `scripts/dev-webdav/wsgidav.yaml`。
 
 ### 应用内配置对应关系
 
@@ -209,6 +206,9 @@ uv pip install --python .venv/bin/python wsgidav cheroot
 - **rclone**：`rclone serve webdav ~/Downloads --addr 127.0.0.1:8181 --user admin --pass admin`
 - **macOS 自带 Apache**：系统仍带 `mod_dav`，但需要改 `/etc/apache2/httpd.conf` 并重启服务，配置较重，不推荐
 
+> 该目录为**可读写**共享，应用内的删除/重命名会直接作用于本机文件。
+> 建议专门建一个共享目录，而不是直接挂 `~/Downloads`。
+>
 > 若要让局域网其他设备访问，需把 `host` 改成 `0.0.0.0` 并放行防火墙；
 > 暴露到局域网时请务必改掉默认口令。
 
