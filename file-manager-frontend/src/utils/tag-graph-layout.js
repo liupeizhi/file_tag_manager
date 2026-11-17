@@ -56,7 +56,10 @@ function emptyNode(node, x, y) {
     width: nodeWidth(node),
     height: NODE_HEIGHT,
     x,
-    y
+    y,
+    // 懒加载标记: 供组件画"可展开"角标
+    expandable: node.expandable === true,
+    expanded: node.expanded === true
   }
 }
 

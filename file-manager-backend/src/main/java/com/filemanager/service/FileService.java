@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -237,6 +238,48 @@ public class FileService {
             }
         } catch (Exception e) {
         }
+    }
+
+    /**
+     * 递归取目录树(只含文件夹), 用于「目录关系图」。
+     * 受 maxDepth 与 maxNodes 双重限制, 避免超大 NAS 目录导致长时间阻塞。
+     */
+    public List<FileDTO> getDirectoryTree(Long serverId, String path, int maxDepth, int maxNodes) {
+        ServerConfig server = getServer(serverId);
+        FileProtocolService service = getProtocolService(server);
+        int[] budget = { Math.max(1, maxNodes) };
+        return collectDirectories(service, server, path, 0, Math.max(1, maxDepth), budget);
+    }
+
+    private List<FileDTO> collectDirectories(FileProtocolService service, ServerConfig server,
+                                             String path, int depth, int maxDepth, int[] budget) {
+        List<FileDTO> result = new ArrayList<>();
+        if (depth >= maxDepth) {
+            return result;
+        }
+        try {
+            List<FileResource> resources = service.listFiles(server, path);
+            for (FileResource resource : resources) {
+                if (budget[0] <= 0) {
+                    break;
+                }
+                if (!resource.isDirectory() || resource.getPath().equals(path)) {
+                    continue;
+                }
+                budget[0]--;
+                FileDTO dto = toDTO(resource, server.getId());
+                List<FileDTO> children = collectDirectories(
+                        service, server, resource.getPath(), depth + 1, maxDepth, budget);
+                dto.setChildren(children);
+                if (budget[0] <= 0 && !children.isEmpty()) {
+                    dto.setTruncated(true);
+                }
+                result.add(dto);
+            }
+        } catch (Exception e) {
+            // 单个目录不可读时跳过, 不影响其余分支
+        }
+        return result;
     }
 
     private void collectResources(FileProtocolService service, ServerConfig server, String path, Map<String, FileResource> allResources) {

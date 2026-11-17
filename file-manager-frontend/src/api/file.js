@@ -49,3 +49,9 @@ export function syncFiles(serverId, path = '/') {
 export function exportDirectory(serverId, path = '/') {
   return `/api/files/export?serverId=${serverId}&path=${encodeURIComponent(path)}`
 }
+/** 递归目录树(仅文件夹), 供目录关系图使用 */
+export function getDirectoryTree(serverId, path = '/', maxDepth = 5, maxNodes = 180) {
+  return request.get('/files/directory-tree', {
+    params: { serverId, path, maxDepth, maxNodes }
+  })
+}

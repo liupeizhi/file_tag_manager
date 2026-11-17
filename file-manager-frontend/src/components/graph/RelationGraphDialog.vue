@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visible"
-    title="标签节点关系图"
+    :title="title"
     class="tag-graph-dialog"
     width="92%"
     top="4vh"
@@ -10,10 +10,8 @@
   >
     <div class="graph-toolbar">
       <div class="graph-hint">
-        原点 → 标签组 → 标签层级
-        <span v-if="stats" class="graph-stats">
-          （{{ stats.groups }} 个分组 · {{ stats.tags }} 个标签）
-        </span>
+        {{ hint }}
+        <span v-if="statsText" class="graph-stats">（{{ statsText }}）</span>
       </div>
       <div class="graph-actions">
         <el-radio-group v-model="layoutMode" size="small" @change="handleLayoutChange">
@@ -75,10 +73,10 @@
                 :width="node.width"
                 :height="node.height"
                 rx="8"
-                :style="node.type === 'tag' ? { stroke: node.color } : {}"
+                :style="node.type === 'leaf' ? { stroke: node.color } : {}"
               />
               <rect
-                v-if="node.type === 'tag'"
+                v-if="node.type === 'leaf'"
                 class="node-accent"
                 :x="-node.width / 2"
                 y="0"
@@ -96,6 +94,16 @@
               >
                 {{ node.label }}
               </text>
+              <!-- 懒加载节点: 未展开时右侧画一个加号 -->
+              <g
+                v-if="node.expandable"
+                class="node-expander"
+                :class="{ expanded: node.expanded }"
+                :transform="`translate(${node.width / 2 - 9}, ${node.height / 2})`"
+              >
+                <circle r="7" />
+                <path d="M -3.2 0 H 3.2 M 0 -3.2 V 3.2" />
+              </g>
               <title>{{ node.title }}</title>
             </g>
           </g>
@@ -105,9 +113,14 @@
 
     <template #footer>
       <div class="graph-legend">
-        <span class="legend-item"><i class="dot dot-root"></i>原点</span>
-        <span class="legend-item"><i class="dot dot-group"></i>标签组</span>
-        <span class="legend-item"><i class="dot dot-tag"></i>标签</span>
+        <span class="legend-item"><i class="dot dot-root"></i>{{ rootLabel }}</span>
+        <span
+          v-for="item in legendItems"
+          :key="item.label"
+          class="legend-item"
+        >
+          <i class="dot" :class="item.dotClass"></i>{{ item.label }}
+        </span>
         <span class="legend-tip">拖动节点会弹回原位 · 空白处拖拽平移 · 滚轮缩放</span>
       </div>
     </template>
@@ -118,13 +131,24 @@
 import { ref, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
-import { getTagGroups } from '@/api/tag'
 import { computeLayout, buildLinkPath, LAYOUTS } from '@/utils/tag-graph-layout'
+
+const props = defineProps({
+  title: { type: String, default: '关系图' },
+  hint: { type: String, default: '' },
+  rootLabel: { type: String, default: '原点' },
+  legendItems: { type: Array, default: () => [] },
+  /**
+   * loader 需返回 { root, statsText }
+   * root: { id, label, type:'root'|'branch'|'leaf', color, title, children: [] }
+   */
+  loader: { type: Function, required: true }
+})
 
 const visible = ref(false)
 const loading = ref(false)
 const hasData = ref(false)
-const stats = ref(null)
+const statsText = ref('')
 const viewportRef = ref(null)
 
 const layoutMode = ref('snowflake')
@@ -165,62 +189,29 @@ const isPanning = ref(false)
 let panStart = null
 let dragging = null
 
-let rawGroups = []
+let currentRoot = null
 
 /* ---------------- 数据 ---------------- */
-function buildTree(groups) {
-  let tagCount = 0
-  const mapTag = (tag) => {
-    tagCount++
-    return {
-      id: `tag-${tag.id}`,
-      label: tag.name,
-      type: 'tag',
-      color: tag.color || '#909399',
-      title: tag.name,
-      children: (tag.children || []).map(mapTag)
-    }
-  }
-  // 注意: 必须先构造 root(触发 mapTag 累加), 再读 tagCount。
-  // 若写成 { tagCount, root: {...} } 字面量, tagCount 会在 root 构建前求值, 恒为 0。
-  const root = {
-    id: 'root',
-    label: '原点',
-    type: 'root',
-    color: '#909399',
-    title: '原点',
-    children: groups.map((g) => ({
-      id: `group-${g.id}`,
-      label: g.name,
-      type: 'group',
-      color: '#909399',
-      title: `${g.name}（${(g.tags || []).length} 个顶级标签）`,
-      children: (g.tags || []).map(mapTag)
-    }))
-  }
-  return { root, tagCount }
-}
-
 function applyLayout() {
-  if (!rawGroups.length && !hasData.value) return
-  const { root, tagCount } = buildTree(rawGroups)
-  const result = computeLayout(root, layoutMode.value)
+  if (!currentRoot) return
+  const result = computeLayout(currentRoot, layoutMode.value)
   nodes.value = result.nodes
   links.value = result.links
   svgSize.value = result.size
   hasData.value = result.nodes.length > 1
-  stats.value = { groups: rawGroups.length, tags: tagCount }
   dragOffsets.value = {}
 }
 
 async function loadData() {
   loading.value = true
   try {
-    rawGroups = (await getTagGroups()) || []
-    applyLayout()
+    const payload = await props.loader()
+    currentRoot = payload ? payload.root : null
+    statsText.value = payload ? payload.statsText || '' : ''
+    if (currentRoot) applyLayout()
   } catch (e) {
-    ElMessage.error('加载标签数据失败')
-    rawGroups = []
+    ElMessage.error('加载数据失败')
+    currentRoot = null
     nodes.value = []
     links.value = []
     hasData.value = false
@@ -305,6 +296,7 @@ function startNodeDrag(e, node) {
     id: node.id,
     startX: e.clientX,
     startY: e.clientY,
+    moved: 0,
     baseDx: prev.dx,
     baseDy: prev.dy
   }
@@ -322,8 +314,11 @@ function startPan(e) {
 function onPointerMove(e) {
   // 拖动节点优先
   if (dragging) {
-    const dx = dragging.baseDx + (e.clientX - dragging.startX) / scale.value
-    const dy = dragging.baseDy + (e.clientY - dragging.startY) / scale.value
+    const movedX = e.clientX - dragging.startX
+    const movedY = e.clientY - dragging.startY
+    dragging.moved = Math.max(dragging.moved, Math.hypot(movedX, movedY))
+    const dx = dragging.baseDx + movedX / scale.value
+    const dy = dragging.baseDy + movedY / scale.value
     setOffset(dragging.id, dx, dy)
     return
   }
@@ -337,15 +332,69 @@ function onPointerMove(e) {
 
 function endPointer() {
   if (dragging) {
-    const { id } = dragging
+    const { id, moved } = dragging
     const cur = dragOffsets.value[id] || { dx: 0, dy: 0 }
     dragging = null
     draggingId.value = null
-    // 松手后弹簧回弹: 节点与连线一起回到布局位置
-    startSpring(id, cur.dx, cur.dy)
+
+    if (moved < 4) {
+      // 几乎没动 -> 视为点击: 清掉偏移并尝试展开
+      setOffset(id, 0, 0)
+      handleNodeActivate(id)
+    } else {
+      // 松手后弹簧回弹: 节点与连线一起回到布局位置
+      startSpring(id, cur.dx, cur.dy)
+    }
   }
   isPanning.value = false
   panStart = null
+}
+
+/* ---------------- 懒加载展开 ---------------- */
+const expandingId = ref(null)
+
+async function handleNodeActivate(nodeId) {
+  const node = findRawNode(currentRoot, nodeId)
+  if (!node || !node.expandable || node.expanded || expandingId.value) return
+
+  expandingId.value = nodeId
+  try {
+    const children = node.loadChildren ? await node.loadChildren() : []
+    node.children = children
+    node.expanded = true
+    // 加载后仍为空 -> 标记为叶子, 去掉角标
+    if (!children.length) {
+      node.expandable = false
+    }
+    applyLayout()
+    updateStats()
+  } catch (e) {
+    ElMessage.error('展开失败: ' + (e.message || '未知错误'))
+  } finally {
+    expandingId.value = null
+  }
+}
+
+function findRawNode(node, id) {
+  if (!node) return null
+  if (node.id === id) return node
+  for (const child of node.children || []) {
+    const found = findRawNode(child, id)
+    if (found) return found
+  }
+  return null
+}
+
+/** 统计已加载的节点数, 覆盖 loader 给的初始文案 */
+function updateStats() {
+  if (!currentRoot) return
+  let dirs = 0
+  const walk = (n, isRoot) => {
+    if (!isRoot && n.id !== 'server') dirs++
+    ;(n.children || []).forEach((c) => walk(c, false))
+  }
+  walk(currentRoot, true)
+  statsText.value = `${dirs} 个文件夹 · 点击节点展开下一层`
 }
 
 /* ---------------- 缩放 ---------------- */
@@ -496,8 +545,25 @@ defineExpose({ open })
   stroke: var(--border-color);
 }
 
-.node-tag {
+.node-leaf {
   stroke-width: 1.4;
+}
+
+/* 懒加载角标: 未展开显示加号, 展开后变为减号且淡化 */
+.node-expander circle {
+  fill: var(--bg-card);
+  stroke: var(--text-secondary);
+  stroke-width: 1;
+}
+
+.node-expander path {
+  stroke: var(--text-secondary);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.node-expander.expanded path {
+  opacity: 0.45;
 }
 
 .node-label {
