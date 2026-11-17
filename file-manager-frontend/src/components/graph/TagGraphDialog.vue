@@ -16,6 +16,11 @@
         </span>
       </div>
       <div class="graph-actions">
+        <el-radio-group v-model="layoutMode" size="small" @change="handleLayoutChange">
+          <el-radio-button v-for="l in LAYOUTS" :key="l.value" :value="l.value">
+            {{ l.label }}
+          </el-radio-button>
+        </el-radio-group>
         <el-button-group size="small">
           <el-button @click="zoomBy(1.2)" :disabled="!hasData">
             <el-icon><ZoomIn /></el-icon>
@@ -23,7 +28,7 @@
           <el-button @click="zoomBy(1 / 1.2)" :disabled="!hasData">
             <el-icon><ZoomOut /></el-icon>
           </el-button>
-          <el-button @click="resetView" :disabled="!hasData">重置</el-button>
+          <el-button @click="fitToView" :disabled="!hasData">重置</el-button>
         </el-button-group>
       </div>
     </div>
@@ -31,12 +36,12 @@
     <div
       ref="viewportRef"
       class="graph-viewport"
-      :class="{ dragging: isDragging }"
+      :class="{ panning: isPanning }"
       v-loading="loading"
-      @mousedown="startDrag"
-      @mousemove="onDrag"
-      @mouseup="endDrag"
-      @mouseleave="endDrag"
+      @mousedown="startPan"
+      @mousemove="onPointerMove"
+      @mouseup="endPointer"
+      @mouseleave="endPointer"
       @wheel.prevent="onWheel"
     >
       <el-empty v-if="!loading && !hasData" description="暂无标签数据" />
@@ -47,29 +52,30 @@
         :width="svgSize.width * scale"
         :height="svgSize.height * scale"
         :viewBox="`0 0 ${svgSize.width} ${svgSize.height}`"
-        :style="{ transform: `translate(${offset.x}px, ${offset.y}px)` }"
+        :style="{ transform: `translate(${view.x}px, ${view.y}px)` }"
       >
-        <!-- 连线 -->
         <g class="graph-links">
           <path
             v-for="link in links"
             :key="link.key"
-            :d="link.d"
+            :d="link.path"
             :stroke="link.color"
             fill="none"
           />
         </g>
 
-        <!-- 节点 -->
         <g class="graph-nodes">
           <g
             v-for="node in nodes"
             :key="node.id"
-            :transform="`translate(${node.x - node.width / 2}, ${node.y})`"
+            :style="nodeStyle(node)"
+            @mousedown.stop="startNodeDrag($event, node)"
           >
             <rect
               class="node-box"
               :class="`node-${node.type}`"
+              :x="-node.width / 2"
+              y="0"
               :width="node.width"
               :height="node.height"
               rx="8"
@@ -78,7 +84,7 @@
             <rect
               v-if="node.type === 'tag'"
               class="node-accent"
-              x="0"
+              :x="-node.width / 2"
               y="0"
               width="3"
               :height="node.height"
@@ -87,7 +93,7 @@
             />
             <text
               class="node-label"
-              :x="node.width / 2 + (node.type === 'tag' ? 2 : 0)"
+              x="0"
               :y="node.height / 2"
               text-anchor="middle"
               dominant-baseline="central"
@@ -105,7 +111,7 @@
         <span class="legend-item"><i class="dot dot-root"></i>原点</span>
         <span class="legend-item"><i class="dot dot-group"></i>标签组</span>
         <span class="legend-item"><i class="dot dot-tag"></i>标签</span>
-        <span class="legend-tip">滚轮缩放 · 拖拽平移</span>
+        <span class="legend-tip">拖动节点会弹回原位 · 空白处拖拽平移 · 滚轮缩放</span>
       </div>
     </template>
   </el-dialog>
@@ -116,153 +122,84 @@ import { ref, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
 import { getTagGroups } from '@/api/tag'
+import { computeLayout, LAYOUTS } from '@/utils/tag-graph-layout'
 
 const visible = ref(false)
-
-/* ---------- 布局参数 ---------- */
-const NODE_HEIGHT = 34
-const NODE_WIDTH = 120
-const ROOT_WIDTH = 90
-const GROUP_WIDTH = 130
-const H_GAP = 16
-const V_GAP = 62
-const PADDING = 40
-
 const loading = ref(false)
+const hasData = ref(false)
+const stats = ref(null)
+const viewportRef = ref(null)
+
+const layoutMode = ref('snowflake')
 const nodes = ref([])
 const links = ref([])
 const svgSize = ref({ width: 0, height: 0 })
 const scale = ref(1)
-const offset = ref({ x: 0, y: 0 })
-const viewportRef = ref(null)
-const hasData = ref(false)
-const stats = ref(null)
+const view = ref({ x: 0, y: 0 })
 
-const isDragging = ref(false)
-const dragStart = ref({ x: 0, y: 0, ox: 0, oy: 0 })
+/** 节点拖动偏移: id -> { dx, dy, springing } */
+const dragOffsets = ref({})
 
-/* ---------- 数据 -> 树 ---------- */
+const isPanning = ref(false)
+let panStart = null
+let dragging = null
+
+let rawGroups = []
+
+/* ---------------- 数据 ---------------- */
 function buildTree(groups) {
-  const root = {
-    id: 'root',
-    label: '原点',
-    type: 'root',
-    color: '#1a1a1a',
-    width: ROOT_WIDTH,
-    title: '原点',
-    children: []
-  }
-
   let tagCount = 0
-
-  const mapTag = (tag, depth) => {
+  const mapTag = (tag) => {
     tagCount++
     return {
       id: `tag-${tag.id}`,
       label: tag.name,
       type: 'tag',
       color: tag.color || '#909399',
-      width: NODE_WIDTH,
       title: tag.name,
-      children: (tag.children || []).map((c) => mapTag(c, depth + 1))
+      children: (tag.children || []).map(mapTag)
     }
   }
-
-  groups.forEach((group) => {
-    root.children.push({
-      id: `group-${group.id}`,
-      label: group.name,
+  // 注意: 必须先构造 root(触发 mapTag 累加), 再读 tagCount。
+  // 若写成 { tagCount, root: {...} } 字面量, tagCount 会在 root 构建前求值, 恒为 0。
+  const root = {
+    id: 'root',
+    label: '原点',
+    type: 'root',
+    color: '#909399',
+    title: '原点',
+    children: groups.map((g) => ({
+      id: `group-${g.id}`,
+      label: g.name,
       type: 'group',
-      color: '#606266',
-      width: GROUP_WIDTH,
-      title: `${group.name}（${(group.tags || []).length} 个顶级标签）`,
-      children: (group.tags || []).map((t) => mapTag(t, 2))
-    })
-  })
-
+      color: '#909399',
+      title: `${g.name}（${(g.tags || []).length} 个顶级标签）`,
+      children: (g.tags || []).map(mapTag)
+    }))
+  }
   return { root, tagCount }
 }
 
-/* ---------- 计算子树宽度 ---------- */
-function measure(node) {
-  if (!node.children || node.children.length === 0) {
-    node.subtreeWidth = node.width
-    return node.subtreeWidth
-  }
-  let total = 0
-  node.children.forEach((child, i) => {
-    total += measure(child)
-    if (i > 0) total += H_GAP
-  })
-  node.subtreeWidth = Math.max(node.width, total)
-  return node.subtreeWidth
+function applyLayout() {
+  if (!rawGroups.length && !hasData.value) return
+  const { root, tagCount } = buildTree(rawGroups)
+  const result = computeLayout(root, layoutMode.value)
+  nodes.value = result.nodes
+  links.value = result.links
+  svgSize.value = result.size
+  hasData.value = result.nodes.length > 1
+  stats.value = { groups: rawGroups.length, tags: tagCount }
+  dragOffsets.value = {}
 }
 
-/* ---------- 递归放置 ---------- */
-function place(node, centerX, depth, out) {
-  const y = PADDING + depth * (NODE_HEIGHT + V_GAP)
-  out.nodes.push({
-    id: node.id,
-    label: node.label,
-    type: node.type,
-    color: node.color,
-    width: node.width,
-    height: NODE_HEIGHT,
-    title: node.title,
-    x: centerX,
-    y
-  })
-
-  if (node.children && node.children.length) {
-    let total = 0
-    node.children.forEach((child, i) => {
-      total += child.subtreeWidth
-      if (i > 0) total += H_GAP
-    })
-    let cursor = centerX - total / 2
-    node.children.forEach((child) => {
-      const childCenter = cursor + child.subtreeWidth / 2
-      out.links.push({
-        key: `${node.id}->${child.id}`,
-        d: curve(centerX, y + NODE_HEIGHT, childCenter, PADDING + (depth + 1) * (NODE_HEIGHT + V_GAP)),
-        color: child.type === 'tag' ? `${child.color}88` : '#d9d9d9'
-      })
-      place(child, childCenter, depth + 1, out)
-      cursor += child.subtreeWidth + H_GAP
-    })
-  }
-}
-
-function curve(x1, y1, x2, y2) {
-  const mid = (y1 + y2) / 2
-  return `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`
-}
-
-function layout(groups) {
-  const { root, tagCount } = buildTree(groups)
-  measure(root)
-  const out = { nodes: [], links: [] }
-  place(root, PADDING + root.subtreeWidth / 2, 0, out)
-
-  const maxY = out.nodes.reduce((m, n) => Math.max(m, n.y + n.height), 0)
-  nodes.value = out.nodes
-  links.value = out.links
-  svgSize.value = {
-    width: root.subtreeWidth + PADDING * 2,
-    height: maxY + PADDING
-  }
-  hasData.value = out.nodes.length > 1
-  stats.value = { groups: groups.length, tags: tagCount }
-}
-
-/* ---------- 交互 ---------- */
 async function loadData() {
   loading.value = true
   try {
-    const groups = (await getTagGroups()) || []
-    layout(groups)
+    rawGroups = (await getTagGroups()) || []
+    applyLayout()
   } catch (e) {
     ElMessage.error('加载标签数据失败')
+    rawGroups = []
     nodes.value = []
     links.value = []
     hasData.value = false
@@ -275,22 +212,103 @@ function handleOpened() {
   loadData().then(() => nextTick(fitToView))
 }
 
-function fitToView() {
-  const vp = viewportRef.value
-  if (!vp || !svgSize.value.width) return
-  const vw = vp.clientWidth
-  const vh = vp.clientHeight
-  const sx = (vw - 24) / svgSize.value.width
-  const sy = (vh - 24) / svgSize.value.height
-  // 内容比视口大时缩小以整体可见, 否则保持 1:1
-  scale.value = Math.min(1, Math.max(0.25, Math.min(sx, sy)))
-  offset.value = { x: 0, y: 0 }
+function handleLayoutChange() {
+  applyLayout()
+  nextTick(fitToView)
 }
 
-function resetView() {
-  fitToView()
+/* ---------------- 节点样式(含回弹) ---------------- */
+function nodeStyle(node) {
+  const off = dragOffsets.value[node.id] || { dx: 0, dy: 0, springing: false }
+  return {
+    transform: `translate(${node.x + off.dx}px, ${node.y + off.dy}px)`,
+    // 松手后回到原位: easeOutBack 会先冲过头再回落, 形成回弹
+    transition: off.springing
+      ? 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)'
+      : 'none'
+  }
 }
 
+/* ---------------- 拖拽节点 ---------------- */
+function startNodeDrag(e, node) {
+  if (!hasData.value) return
+  e.stopPropagation()
+  const prev = dragOffsets.value[node.id] || { dx: 0, dy: 0 }
+  dragging = {
+    id: node.id,
+    startX: e.clientX,
+    startY: e.clientY,
+    baseDx: prev.dx,
+    baseDy: prev.dy
+  }
+  dragOffsets.value = {
+    ...dragOffsets.value,
+    [node.id]: { dx: prev.dx, dy: prev.dy, springing: false }
+  }
+}
+
+/* ---------------- 平移画布 ---------------- */
+function startPan(e) {
+  if (!hasData.value) return
+  isPanning.value = true
+  panStart = { x: e.clientX, y: e.clientY, vx: view.value.x, vy: view.value.y }
+}
+
+function onPointerMove(e) {
+  // 拖动节点优先
+  if (dragging) {
+    const dx = dragging.baseDx + (e.clientX - dragging.startX) / scale.value
+    const dy = dragging.baseDy + (e.clientY - dragging.startY) / scale.value
+    dragOffsets.value = {
+      ...dragOffsets.value,
+      [dragging.id]: { dx, dy, springing: false }
+    }
+    return
+  }
+  if (isPanning.value && panStart) {
+    view.value = {
+      x: panStart.vx + (e.clientX - panStart.x),
+      y: panStart.vy + (e.clientY - panStart.y)
+    }
+  }
+}
+
+function endPointer() {
+  // 松手: 给该节点开启回弹动画, 下一帧把偏移归零
+  if (dragging) {
+    const id = dragging.id
+    const cur = dragOffsets.value[id] || { dx: 0, dy: 0 }
+    dragOffsets.value = {
+      ...dragOffsets.value,
+      [id]: { dx: cur.dx, dy: cur.dy, springing: true }
+    }
+    const target = id
+    // 下一帧置零, 触发 transition 回弹
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        dragOffsets.value = {
+          ...dragOffsets.value,
+          [target]: { dx: 0, dy: 0, springing: true }
+        }
+        // 动画结束后移除标记, 避免下次拖动被过渡影响
+        setTimeout(() => {
+          const o = dragOffsets.value[target]
+          if (o && o.springing && o.dx === 0 && o.dy === 0) {
+            dragOffsets.value = {
+              ...dragOffsets.value,
+              [target]: { dx: 0, dy: 0, springing: false }
+            }
+          }
+        }, 600)
+      })
+    })
+    dragging = null
+  }
+  isPanning.value = false
+  panStart = null
+}
+
+/* ---------------- 缩放 ---------------- */
 function zoomBy(factor) {
   scale.value = Math.min(3, Math.max(0.2, scale.value * factor))
 }
@@ -301,22 +319,22 @@ function onWheel(e) {
   scale.value = Math.min(3, Math.max(0.2, scale.value * factor))
 }
 
-function startDrag(e) {
-  if (!hasData.value) return
-  isDragging.value = true
-  dragStart.value = { x: e.clientX, y: e.clientY, ox: offset.value.x, oy: offset.value.y }
-}
-
-function onDrag(e) {
-  if (!isDragging.value) return
-  offset.value = {
-    x: dragStart.value.ox + (e.clientX - dragStart.value.x),
-    y: dragStart.value.oy + (e.clientY - dragStart.value.y)
+function fitToView() {
+  const vp = viewportRef.value
+  if (!vp || !svgSize.value.width) return
+  const vw = vp.clientWidth
+  const vh = vp.clientHeight
+  const sx = (vw - 24) / svgSize.value.width
+  const sy = (vh - 24) / svgSize.value.height
+  scale.value = Math.min(1, Math.max(0.2, Math.min(sx, sy)))
+  // 内容缩放后居中显示, 否则会贴在视口左上角
+  const scaledW = svgSize.value.width * scale.value
+  const scaledH = svgSize.value.height * scale.value
+  view.value = {
+    x: Math.max(0, (vw - scaledW) / 2),
+    y: Math.max(0, (vh - scaledH) / 2)
   }
-}
-
-function endDrag() {
-  isDragging.value = false
+  dragOffsets.value = {}
 }
 
 function open() {
@@ -337,6 +355,7 @@ defineExpose({ open })
   justify-content: space-between;
   padding: 4px 0 10px;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .graph-hint {
@@ -348,9 +367,16 @@ defineExpose({ open })
   color: var(--text-secondary);
 }
 
+.graph-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .graph-viewport {
   position: relative;
-  height: 68vh;
+  height: 70vh;
   overflow: hidden;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-control);
@@ -360,7 +386,7 @@ defineExpose({ open })
   cursor: grab;
 }
 
-.graph-viewport.dragging {
+.graph-viewport.panning {
   cursor: grabbing;
 }
 
@@ -374,6 +400,10 @@ defineExpose({ open })
   stroke-linecap: round;
 }
 
+.graph-nodes g {
+  cursor: move;
+}
+
 .node-box {
   fill: var(--bg-card);
   stroke: var(--border-color);
@@ -382,12 +412,18 @@ defineExpose({ open })
 
 /*
  * 原点不直接用 --text-primary 填充: 自定义主题下它可能是任意亮度,
- * 没法保证与文字的反色对比。改为卡片底色 + 加粗描边, 任何主题都清晰。
+ * 没法保证与文字的反色对比。改为卡片底色 + 加粗描边。
  */
 .node-root {
   fill: var(--bg-card);
   stroke: var(--text-primary);
   stroke-width: 2;
+}
+
+.node-root + .node-accent + .node-label,
+.node-root + .node-label {
+  fill: var(--text-primary);
+  font-weight: 600;
 }
 
 .node-group {
@@ -406,19 +442,9 @@ defineExpose({ open })
   pointer-events: none;
 }
 
-/* 原点加粗, 与普通标签区分 */
-.node-root + .node-label {
-  fill: var(--text-primary);
-  font-weight: 600;
-}
-
 .graph-nodes g:hover .node-box {
   stroke: var(--text-primary);
   stroke-width: 1.6;
-}
-
-.graph-nodes g:hover .node-label {
-  font-weight: 600;
 }
 
 .graph-legend {
@@ -443,7 +469,8 @@ defineExpose({ open })
 }
 
 .dot-root {
-  background: var(--text-primary);
+  background: var(--bg-card);
+  border: 2px solid var(--text-primary);
 }
 
 .dot-group {
