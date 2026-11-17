@@ -35,6 +35,12 @@
         />
       </el-select>
 
+      <el-tooltip content="标签关系图" placement="bottom">
+        <el-button circle class="icon-button graph-button" @click="tagGraphRef?.open()">
+          <el-icon :size="16"><Connection /></el-icon>
+        </el-button>
+      </el-tooltip>
+
       <el-tooltip content="主题设置" placement="bottom">
         <el-button circle class="icon-button" @click="router.push('/theme')">
           <el-icon :size="16"><Brush /></el-icon>
@@ -83,22 +89,26 @@
         登录
       </el-button>
     </div>
+
+    <TagGraphDialog ref="tagGraphRef" />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useServerStore } from '@/store/server'
 import { useUserStore } from '@/store/user'
 import { useFileStore } from '@/store/file'
-import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown, Switch, Brush } from '@element-plus/icons-vue'
+import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown, Switch, Brush, Connection } from '@element-plus/icons-vue'
 import ThemeSwitcher from '@/components/common/ThemeSwitcher.vue'
+import TagGraphDialog from '@/components/graph/TagGraphDialog.vue'
 
 const router = useRouter()
 const serverStore = useServerStore()
 const userStore = useUserStore()
 const fileStore = useFileStore()
+const tagGraphRef = ref(null)
 
 onMounted(async () => {
   await serverStore.loadServers()
