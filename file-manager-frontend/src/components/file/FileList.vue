@@ -238,6 +238,7 @@
     <div 
       v-else 
       class="grid-view"
+      :class="{ 'is-empty': !fileStore.loading && filteredFileList.length === 0 }"
       v-loading="fileStore.loading"
     >
       <div 
@@ -1184,6 +1185,16 @@ defineExpose({
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 16px;
   align-content: start;
+}
+
+/*
+ * 空状态: grid 容器会把 el-empty 当成单个网格单元塞进 120px 宽的格子,
+ * 看起来贴在左上角。改成 flex 居中, 与表格视图的"暂无数据"位置对齐。
+ */
+.grid-view.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .current-path {
