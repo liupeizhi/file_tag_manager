@@ -167,6 +167,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getServers, addServer, updateServer, deleteServer as deleteServerApi, testServerConnection } from '@/api/server'
 
+/** 选择 WebDAV 协议时地址栏的默认值(本机/局域网 NAS) */
+const DEFAULT_WEBDAV_URL = 'https://192.168.100.172:5006'
+
 const loading = ref(false)
 const testing = ref(false)
 const saving = ref(false)
@@ -179,7 +182,7 @@ const form = reactive({
   id: null,
   name: '',
   protocol: 'webdav',
-  url: '',
+  url: DEFAULT_WEBDAV_URL,
   host: '',
   port: null,
   shareName: '',
@@ -242,7 +245,7 @@ function getDefaultForm() {
     id: null,
     name: '',
     protocol: 'webdav',
-    url: '',
+    url: DEFAULT_WEBDAV_URL,
     host: '',
     port: null,
     shareName: '',
@@ -273,6 +276,9 @@ function onProtocolChange(protocol) {
   }
   if (protocol !== 'webdav') {
     form.url = ''
+  } else if (!form.url) {
+    // 切回 WebDAV 时, 地址为空则回填默认值
+    form.url = DEFAULT_WEBDAV_URL
   }
   if (protocol === 'webdav') {
     form.host = ''
