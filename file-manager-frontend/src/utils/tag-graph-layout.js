@@ -4,10 +4,13 @@
  * 输入是一棵已建好的树:
  *   { id, label, type: 'root'|'group'|'tag', color, title, children: [...] }
  *
- * 输出统一为节点中心坐标 + 连线路径, 由组件负责绘制:
- *   { nodes: [{ id, type, label, color, width, height, title, x, y }],
- *     links: [{ key, path, color }],
- *     size: { width, height } }
+ * 输出:
+ *   nodes: [{ id, type, label, color, width, height, title, x, y }]
+ *          x/y 为节点盒子的「顶部中心」, 绘制时盒子从 y 向下展开
+ *   links: [{ key, from, to, color, curve }]
+ *          curve 为 'v'(上下) | 'h'(左右) | 'line'(直线),
+ *          由组件按节点实时位置生成路径, 这样拖动节点时连线能跟随
+ *   size:  { width, height }
  */
 
 export const LAYOUTS = [
@@ -26,7 +29,6 @@ const PADDING = 48
 const H_GAP = 18        // 树形兄弟节点间距
 const V_GAP = 64        // 树形层级间距
 const RADIUS_STEP = 142 // 雪花型每层半径
-const RING_GAP = 170    // 环形每层半径
 
 export function nodeWidth(node) {
   if (node.type === 'root') return ROOT_WIDTH
@@ -34,7 +36,7 @@ export function nodeWidth(node) {
   return NODE_WIDTH
 }
 
-/* ============ 通用: 叶子数(用于瓜分角度) ============ */
+/* ============ 通用 ============ */
 function assignLeaves(node) {
   if (!node.children || node.children.length === 0) {
     node._leaves = 1
@@ -58,6 +60,10 @@ function emptyNode(node, x, y) {
   }
 }
 
+function linkColor(child) {
+  return child.type === 'tag' ? `${child.color}88` : '#c9c9c9'
+}
+
 /* ============ 树形 / 横向 ============ */
 function measureSubtree(node) {
   const w = nodeWidth(node)
@@ -74,18 +80,13 @@ function measureSubtree(node) {
   return node._w
 }
 
-/**
- * @param horizontal true 时根在左、子级向右展开
- */
 function layoutTree(root, horizontal) {
   measureSubtree(root)
   const nodes = []
   const links = []
+  const curve = horizontal ? 'h' : 'v'
 
   const place = (node, crossCenter, depth) => {
-    // vertical 模式: 主轴先按深度向下, 交叉轴水平铺开
-    const crossSize = horizontal ? NODE_HEIGHT : nodeWidth(node)
-    void crossSize
     const pos = horizontal
       ? { x: PADDING + depth * (GROUP_WIDTH + V_GAP), y: crossCenter }
       : { x: crossCenter, y: PADDING + depth * (NODE_HEIGHT + V_GAP) }
@@ -101,18 +102,13 @@ function layoutTree(root, horizontal) {
       let cursor = crossCenter - total / 2
       node.children.forEach((child) => {
         const childCenter = cursor + child._w / 2
-        const childPos = horizontal
-          ? { x: PADDING + (depth + 1) * (GROUP_WIDTH + V_GAP), y: childCenter }
-          : { x: childCenter, y: PADDING + (depth + 1) * (NODE_HEIGHT + V_GAP) }
-
         links.push({
           key: `${node.id}->${child.id}`,
-          path: horizontal
-            ? hCurve(pos.x, pos.y, childPos.x, childPos.y)
-            : vCurve(pos.x, pos.y, childPos.x, childPos.y),
-          color: child.type === 'tag' ? `${child.color}88` : '#c9c9c9'
+          from: node.id,
+          to: child.id,
+          color: linkColor(child),
+          curve
         })
-
         place(child, childCenter, depth + 1)
         cursor += child._w + H_GAP
       })
@@ -133,50 +129,36 @@ function layoutTree(root, horizontal) {
   }
 }
 
-function vCurve(x1, y1, x2, y2) {
-  const mid = (y1 + y2) / 2
-  return `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`
-}
-
-function hCurve(x1, y1, x2, y2) {
-  const mid = (x1 + x2) / 2
-  return `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`
-}
-
 /* ============ 雪花型 (径向) ============ */
 function layoutSnowflake(root) {
   assignLeaves(root)
 
   const nodes = []
   const links = []
+
   const maxDepth = depthOf(root)
-  const radius = {
-    total: maxDepth * RADIUS_STEP + PADDING,
-    cx: 0,
-    cy: 0
-  }
-  radius.cx = radius.total
-  radius.cy = radius.total
+  const center = maxDepth * RADIUS_STEP + PADDING
+  const total = center * 2
 
   const place = (node, a0, a1, depth) => {
     const angle = (a0 + a1) / 2
     const r = depth * RADIUS_STEP
-    // 根节点居中; 其余按角度铺开
-    const x = depth === 0 ? radius.cx : radius.cx + r * Math.cos(angle)
-    const y = depth === 0 ? radius.cy : radius.cy + r * Math.sin(angle)
-    nodes.push(emptyNode(node, x, y))
+    const cx = depth === 0 ? center : center + r * Math.cos(angle)
+    const cy = depth === 0 ? center : center + r * Math.sin(angle)
+    // 记录的是盒子顶部中心, 所以把圆心对齐到节点中线
+    nodes.push(emptyNode(node, cx, cy - NODE_HEIGHT / 2))
 
     if (node.children && node.children.length) {
       const totalLeaves = node.children.reduce((s, c) => s + c._leaves, 0) || 1
       let cursor = a0
       node.children.forEach((child) => {
         const span = (a1 - a0) * (child._leaves / totalLeaves)
-        const childAngle = cursor + span / 2
-        const childR = (depth + 1) * RADIUS_STEP
         links.push({
           key: `${node.id}->${child.id}`,
-          path: `M ${x} ${y} L ${radius.cx + childR * Math.cos(childAngle)} ${radius.cy + childR * Math.sin(childAngle)}`,
-          color: child.type === 'tag' ? `${child.color}88` : '#c9c9c9'
+          from: node.id,
+          to: child.id,
+          color: linkColor(child),
+          curve: 'line'
         })
         place(child, cursor, cursor + span, depth + 1)
         cursor += span
@@ -184,11 +166,10 @@ function layoutSnowflake(root) {
     }
   }
 
-  // 根节点占满整个圆周; 第一个子节点从 -90° 开始, 视觉上更像"向上开花"
+  // 根节点占满整个圆周, 从 -90° 开始, 视觉上"向上开花"
   place(root, -Math.PI / 2, Math.PI * 1.5, 0)
 
-  const size = radius.total * 2
-  return { nodes, links, size: { width: size, height: size } }
+  return { nodes, links, size: { width: total, height: total } }
 }
 
 function depthOf(node) {
@@ -198,13 +179,18 @@ function depthOf(node) {
 
 /* ============ 力导向 ============ */
 /**
- * 以雪花型结果为初始位置, 跑少量迭代的力导向松弛:
- * 全节点斥力 + 连线弹簧 + 向心引力。
- * 固定迭代次数(非持续模拟), 布局结果稳定且可复现。
+ * 以雪花型结果为初始位置, 跑固定次数的力导向松弛:
+ * 全节点斥力 + 连线弹簧 + 向心引力。结果稳定可复现。
  */
 function layoutForce(root) {
   const seed = layoutSnowflake(root)
-  const pts = seed.nodes.map((n) => ({ node: n, x: n.x, y: n.y, vx: 0, vy: 0 }))
+  const pts = seed.nodes.map((n) => ({
+    node: n,
+    x: n.x + n.width / 2,
+    y: n.y + n.height / 2,
+    vx: 0,
+    vy: 0
+  }))
   const index = new Map(pts.map((p) => [p.node.id, p]))
 
   const edges = []
@@ -217,13 +203,12 @@ function layoutForce(root) {
   walk(root)
 
   const ITER = 260
-  const REPULSE = 26000     // 斥力强度
-  const SPRING = 0.055      // 弹簧刚度
-  const REST = 132          // 弹簧自然长度
-  const GRAVITY = 0.012     // 向心引力
+  const REPULSE = 26000
+  const SPRING = 0.055
+  const REST = 132
+  const GRAVITY = 0.012
 
   for (let iter = 0; iter < ITER; iter++) {
-    // 斥力
     for (let i = 0; i < pts.length; i++) {
       for (let j = i + 1; j < pts.length; j++) {
         const a = pts[i]
@@ -240,7 +225,6 @@ function layoutForce(root) {
         b.vx -= fx; b.vy -= fy
       }
     }
-    // 弹簧
     for (const [a, b] of edges) {
       const dx = b.x - a.x
       const dy = b.y - a.y
@@ -251,7 +235,6 @@ function layoutForce(root) {
       a.vx += fx; a.vy += fy
       b.vx -= fx; b.vy -= fy
     }
-    // 向心 + 阻尼 + 位移
     const cool = 1 - iter / ITER
     for (const p of pts) {
       p.vx += -p.x * GRAVITY
@@ -263,7 +246,6 @@ function layoutForce(root) {
     }
   }
 
-  // 归一化到正区间并留边距
   const xs = pts.map((p) => p.x)
   const ys = pts.map((p) => p.y)
   const minX = Math.min(...xs)
@@ -276,21 +258,18 @@ function layoutForce(root) {
   const nodes = pts.map((p) => ({
     ...p.node,
     x: p.x + offsetX,
-    y: p.y + offsetY
+    y: p.y + offsetY - NODE_HEIGHT / 2
   }))
-  const posOf = new Map(nodes.map((n) => [n.id, n]))
 
   const links = []
   const addLinks = (n) => (n.children || []).forEach((c) => {
-    const p = posOf.get(n.id)
-    const q = posOf.get(c.id)
-    if (p && q) {
-      links.push({
-        key: `${n.id}->${c.id}`,
-        path: `M ${p.x} ${p.y} L ${q.x} ${q.y}`,
-        color: c.type === 'tag' ? `${c.color}88` : '#c9c9c9'
-      })
-    }
+    links.push({
+      key: `${n.id}->${c.id}`,
+      from: n.id,
+      to: c.id,
+      color: linkColor(c),
+      curve: 'line'
+    })
     addLinks(c)
   })
   addLinks(root)
@@ -298,7 +277,7 @@ function layoutForce(root) {
   return {
     nodes,
     links,
-    size: { width: w + PADDING * 2, height: h + PADDING * 2 }
+    size: { width: w + PADDING * 2, height: h + PADDING * 2 + NODE_HEIGHT }
   }
 }
 
@@ -315,4 +294,21 @@ export function computeLayout(root, mode) {
     default:
       return layoutTree(root, false)
   }
+}
+
+/* ============ 连线路径 ============ */
+/**
+ * 按两个节点的实时中心点生成路径。
+ * 拖动节点时组件会重新调用本函数, 因此连线会跟着走。
+ */
+export function buildLinkPath(curve, x1, y1, x2, y2) {
+  if (curve === 'v') {
+    const mid = (y1 + y2) / 2
+    return `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`
+  }
+  if (curve === 'h') {
+    const mid = (x1 + x2) / 2
+    return `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`
+  }
+  return `M ${x1} ${y1} L ${x2} ${y2}`
 }

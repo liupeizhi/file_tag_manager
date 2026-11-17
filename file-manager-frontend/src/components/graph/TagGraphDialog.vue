@@ -46,61 +46,58 @@
     >
       <el-empty v-if="!loading && !hasData" description="暂无标签数据" />
 
-      <svg
-        v-else
-        class="graph-svg"
-        :width="svgSize.width * scale"
-        :height="svgSize.height * scale"
-        :viewBox="`0 0 ${svgSize.width} ${svgSize.height}`"
-        :style="{ transform: `translate(${view.x}px, ${view.y}px)` }"
-      >
-        <g class="graph-links">
-          <path
-            v-for="link in links"
-            :key="link.key"
-            :d="link.path"
-            :stroke="link.color"
-            fill="none"
-          />
-        </g>
+      <svg v-else class="graph-svg">
+        <!-- 缩放与平移放在内层 g 上, SVG 本身铺满视口 -->
+        <g :transform="`translate(${view.x} ${view.y}) scale(${scale})`">
+          <g class="graph-links">
+            <path
+              v-for="link in renderedLinks"
+              :key="link.key"
+              :d="link.d"
+              :stroke="link.color"
+              fill="none"
+            />
+          </g>
 
-        <g class="graph-nodes">
-          <g
-            v-for="node in nodes"
-            :key="node.id"
-            :style="nodeStyle(node)"
-            @mousedown.stop="startNodeDrag($event, node)"
-          >
-            <rect
-              class="node-box"
-              :class="`node-${node.type}`"
-              :x="-node.width / 2"
-              y="0"
-              :width="node.width"
-              :height="node.height"
-              rx="8"
-              :style="node.type === 'tag' ? { stroke: node.color } : {}"
-            />
-            <rect
-              v-if="node.type === 'tag'"
-              class="node-accent"
-              :x="-node.width / 2"
-              y="0"
-              width="3"
-              :height="node.height"
-              rx="1.5"
-              :fill="node.color"
-            />
-            <text
-              class="node-label"
-              x="0"
-              :y="node.height / 2"
-              text-anchor="middle"
-              dominant-baseline="central"
+          <g class="graph-nodes">
+            <g
+              v-for="node in nodes"
+              :key="node.id"
+              :class="{ dragging: draggingId === node.id }"
+              :style="nodeStyle(node)"
+              @mousedown.stop="startNodeDrag($event, node)"
             >
-              {{ node.label }}
-            </text>
-            <title>{{ node.title }}</title>
+              <rect
+                class="node-box"
+                :class="`node-${node.type}`"
+                :x="-node.width / 2"
+                y="0"
+                :width="node.width"
+                :height="node.height"
+                rx="8"
+                :style="node.type === 'tag' ? { stroke: node.color } : {}"
+              />
+              <rect
+                v-if="node.type === 'tag'"
+                class="node-accent"
+                :x="-node.width / 2"
+                y="0"
+                width="3"
+                :height="node.height"
+                rx="1.5"
+                :fill="node.color"
+              />
+              <text
+                class="node-label"
+                x="0"
+                :y="node.height / 2"
+                text-anchor="middle"
+                dominant-baseline="central"
+              >
+                {{ node.label }}
+              </text>
+              <title>{{ node.title }}</title>
+            </g>
           </g>
         </g>
       </svg>
@@ -122,7 +119,7 @@ import { ref, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
 import { getTagGroups } from '@/api/tag'
-import { computeLayout, LAYOUTS } from '@/utils/tag-graph-layout'
+import { computeLayout, buildLinkPath, LAYOUTS } from '@/utils/tag-graph-layout'
 
 const visible = ref(false)
 const loading = ref(false)
@@ -139,6 +136,30 @@ const view = ref({ x: 0, y: 0 })
 
 /** 节点拖动偏移: id -> { dx, dy, springing } */
 const dragOffsets = ref({})
+const draggingId = ref(null)
+
+/**
+ * 连线按节点"当前"位置(布局位置 + 拖动偏移)实时计算,
+ * 因此拖动节点时连线会跟着走。
+ */
+const renderedLinks = computed(() => {
+  const nodeMap = new Map(nodes.value.map((n) => [n.id, n]))
+  const offsets = dragOffsets.value
+  const out = []
+  for (const link of links.value) {
+    const a = nodeMap.get(link.from)
+    const b = nodeMap.get(link.to)
+    if (!a || !b) continue
+    const ao = offsets[a.id] || { dx: 0, dy: 0 }
+    const bo = offsets[b.id] || { dx: 0, dy: 0 }
+    const x1 = a.x + ao.dx
+    const y1 = a.y + ao.dy + a.height / 2
+    const x2 = b.x + bo.dx
+    const y2 = b.y + bo.dy + b.height / 2
+    out.push({ key: link.key, color: link.color, d: buildLinkPath(link.curve, x1, y1, x2, y2) })
+  }
+  return out
+})
 
 const isPanning = ref(false)
 let panStart = null
@@ -217,22 +238,68 @@ function handleLayoutChange() {
   nextTick(fitToView)
 }
 
-/* ---------------- 节点样式(含回弹) ---------------- */
+/* ---------------- 节点样式 ---------------- */
 function nodeStyle(node) {
-  const off = dragOffsets.value[node.id] || { dx: 0, dy: 0, springing: false }
+  const off = dragOffsets.value[node.id] || { dx: 0, dy: 0 }
   return {
-    transform: `translate(${node.x + off.dx}px, ${node.y + off.dy}px)`,
-    // 松手后回到原位: easeOutBack 会先冲过头再回落, 形成回弹
-    transition: off.springing
-      ? 'transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)'
-      : 'none'
+    transform: `translate(${node.x + off.dx}px, ${node.y + off.dy}px)`
   }
+}
+
+function setOffset(id, dx, dy) {
+  dragOffsets.value = { ...dragOffsets.value, [id]: { dx, dy } }
+}
+
+/* ---------------- 回弹弹簧 ---------------- */
+let springRaf = null
+
+/**
+ * 松手后的回弹。用 rAF 逐帧跑弹簧, 而不是 CSS transition ——
+ * 因为连线是按 dragOffsets 实时算的, 只有逐帧更新偏移量,
+ * 节点和连线才能一起"弹"回原位。
+ */
+function startSpring(id, fromDx, fromDy) {
+  if (springRaf) {
+    cancelAnimationFrame(springRaf)
+    springRaf = null
+  }
+  const STIFFNESS = 0.09
+  const DAMPING = 0.84
+  const REST = 0.4
+
+  let dx = fromDx
+  let dy = fromDy
+  let vx = 0
+  let vy = 0
+
+  const step = () => {
+    vx = (vx - dx * STIFFNESS) * DAMPING
+    vy = (vy - dy * STIFFNESS) * DAMPING
+    dx += vx
+    dy += vy
+
+    if (
+      Math.abs(dx) <= REST && Math.abs(dy) <= REST &&
+      Math.abs(vx) <= REST && Math.abs(vy) <= REST
+    ) {
+      setOffset(id, 0, 0)
+      springRaf = null
+      return
+    }
+    setOffset(id, dx, dy)
+    springRaf = requestAnimationFrame(step)
+  }
+  springRaf = requestAnimationFrame(step)
 }
 
 /* ---------------- 拖拽节点 ---------------- */
 function startNodeDrag(e, node) {
   if (!hasData.value) return
   e.stopPropagation()
+  if (springRaf) {
+    cancelAnimationFrame(springRaf)
+    springRaf = null
+  }
   const prev = dragOffsets.value[node.id] || { dx: 0, dy: 0 }
   dragging = {
     id: node.id,
@@ -241,10 +308,8 @@ function startNodeDrag(e, node) {
     baseDx: prev.dx,
     baseDy: prev.dy
   }
-  dragOffsets.value = {
-    ...dragOffsets.value,
-    [node.id]: { dx: prev.dx, dy: prev.dy, springing: false }
-  }
+  draggingId.value = node.id
+  setOffset(node.id, prev.dx, prev.dy)
 }
 
 /* ---------------- 平移画布 ---------------- */
@@ -259,10 +324,7 @@ function onPointerMove(e) {
   if (dragging) {
     const dx = dragging.baseDx + (e.clientX - dragging.startX) / scale.value
     const dy = dragging.baseDy + (e.clientY - dragging.startY) / scale.value
-    dragOffsets.value = {
-      ...dragOffsets.value,
-      [dragging.id]: { dx, dy, springing: false }
-    }
+    setOffset(dragging.id, dx, dy)
     return
   }
   if (isPanning.value && panStart) {
@@ -274,35 +336,13 @@ function onPointerMove(e) {
 }
 
 function endPointer() {
-  // 松手: 给该节点开启回弹动画, 下一帧把偏移归零
   if (dragging) {
-    const id = dragging.id
+    const { id } = dragging
     const cur = dragOffsets.value[id] || { dx: 0, dy: 0 }
-    dragOffsets.value = {
-      ...dragOffsets.value,
-      [id]: { dx: cur.dx, dy: cur.dy, springing: true }
-    }
-    const target = id
-    // 下一帧置零, 触发 transition 回弹
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        dragOffsets.value = {
-          ...dragOffsets.value,
-          [target]: { dx: 0, dy: 0, springing: true }
-        }
-        // 动画结束后移除标记, 避免下次拖动被过渡影响
-        setTimeout(() => {
-          const o = dragOffsets.value[target]
-          if (o && o.springing && o.dx === 0 && o.dy === 0) {
-            dragOffsets.value = {
-              ...dragOffsets.value,
-              [target]: { dx: 0, dy: 0, springing: false }
-            }
-          }
-        }, 600)
-      })
-    })
     dragging = null
+    draggingId.value = null
+    // 松手后弹簧回弹: 节点与连线一起回到布局位置
+    startSpring(id, cur.dx, cur.dy)
   }
   isPanning.value = false
   panStart = null
@@ -319,22 +359,42 @@ function onWheel(e) {
   scale.value = Math.min(3, Math.max(0.2, scale.value * factor))
 }
 
+/** 所有节点的实际包围盒(不含画布留白), 用于真正居中内容 */
+function contentBounds() {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const n of nodes.value) {
+    minX = Math.min(minX, n.x - n.width / 2)
+    maxX = Math.max(maxX, n.x + n.width / 2)
+    minY = Math.min(minY, n.y)
+    maxY = Math.max(maxY, n.y + n.height)
+  }
+  if (!Number.isFinite(minX)) return null
+  return { minX, minY, w: maxX - minX, h: maxY - minY }
+}
+
 function fitToView() {
   const vp = viewportRef.value
-  if (!vp || !svgSize.value.width) return
+  const b = contentBounds()
+  if (!vp || !b) return
+  if (springRaf) {
+    cancelAnimationFrame(springRaf)
+    springRaf = null
+  }
   const vw = vp.clientWidth
   const vh = vp.clientHeight
-  const sx = (vw - 24) / svgSize.value.width
-  const sy = (vh - 24) / svgSize.value.height
+  const sx = (vw - 24) / b.w
+  const sy = (vh - 24) / b.h
   scale.value = Math.min(1, Math.max(0.2, Math.min(sx, sy)))
-  // 内容缩放后居中显示, 否则会贴在视口左上角
-  const scaledW = svgSize.value.width * scale.value
-  const scaledH = svgSize.value.height * scale.value
+  // 按内容包围盒居中(雪花型的节点分布并非四周对称, 只按画布居中会偏)
   view.value = {
-    x: Math.max(0, (vw - scaledW) / 2),
-    y: Math.max(0, (vh - scaledH) / 2)
+    x: (vw - b.w * scale.value) / 2 - b.minX * scale.value,
+    y: (vh - b.h * scale.value) / 2 - b.minY * scale.value
   }
   dragOffsets.value = {}
+  draggingId.value = null
 }
 
 function open() {
@@ -392,7 +452,8 @@ defineExpose({ open })
 
 .graph-svg {
   display: block;
-  transform-origin: 0 0;
+  width: 100%;
+  height: 100%;
 }
 
 .graph-links path {
@@ -401,7 +462,11 @@ defineExpose({ open })
 }
 
 .graph-nodes g {
-  cursor: move;
+  cursor: pointer;
+}
+
+.graph-nodes g.dragging {
+  cursor: grabbing;
 }
 
 .node-box {
