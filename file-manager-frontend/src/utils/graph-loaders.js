@@ -3,16 +3,15 @@
  *
  * loader 返回统一的树结构:
  *   { root: { id, label, type:'root'|'branch'|'leaf', color, title,
- *             children: [], expandable?: boolean, expanded?: boolean,
- *             loadChildren?: async () => TreeNode[] },
+ *             children: [], expandable?, expanded?, loadChildren? },
  *     statsText }
  *
- * 目录图采用懒加载: 初始只取一层, 节点上的 loadChildren 在点击时
- * 才去拉取下一层子目录。
+ * 目录图采用懒加载: 初始只取一层, 节点上的 loadChildren 在展开时才拉取下一层。
  */
 
 import { getTagGroups } from '@/api/tag'
 import { getDirectoryTree } from '@/api/file'
+import { getFileTypeInfo } from '@/utils/file-type'
 
 const ROOT_ID = 'root'
 
@@ -66,44 +65,60 @@ function makeDirectoryNode(serverId, dir) {
     color: '#909399',
     title: path,
     children: [],
-    // 目录都可能还有下级, 点击时再去确认; 若确实为空则展开后 badge 消失
+    // 目录默认视为可展开; 展开后若为空会自动去掉角标
     expandable: true,
     expanded: false,
     loadChildren: async () => {
-      const sub = (await getDirectoryTree(serverId, path, 1, 500)) || []
-      return sub.map((d) => makeDirectoryNode(serverId, d))
+      const sub = (await getDirectoryTree(serverId, path, 1, 500, true, 60)) || []
+      return sub.map((d) => makeEntryNode(serverId, d))
     }
   }
 }
 
+function makeFileNode(file) {
+  const info = getFileTypeInfo(file.name)
+  return {
+    id: `file-${file.path}`,
+    label: file.name,
+    type: 'leaf',
+    color: info.color || '#909399',
+    title: file.path,
+    children: []
+  }
+}
+
+function makeEntryNode(serverId, entry) {
+  return entry.isDirectory
+    ? makeDirectoryNode(serverId, entry)
+    : makeFileNode(entry)
+}
+
+/**
+ * 目录图的根节点就是服务器本身 —— 目录有天然的根,
+ * 再套一层"原点"只会让人困惑。
+ */
 export async function loadDirectoryGraph(serverId, serverName) {
   if (serverId == null) {
     return { root: null, statsText: '' }
   }
 
   // 只取第一层, 其余按需展开
-  const dirs = (await getDirectoryTree(serverId, '/', 1, 500)) || []
-
-  const serverNode = {
-    id: 'server',
-    label: serverName || '当前服务器',
-    type: 'branch',
-    color: '#909399',
-    title: serverName || '当前服务器',
-    children: dirs.map((d) => makeDirectoryNode(serverId, d))
-  }
+  const entries = (await getDirectoryTree(serverId, '/', 1, 500, true, 60)) || []
 
   const root = {
-    id: ROOT_ID,
-    label: '原点',
+    id: 'server',
+    label: serverName || '当前服务器',
     type: 'root',
     color: '#909399',
-    title: '原点',
-    children: [serverNode]
+    title: `${serverName || '当前服务器'} · 根目录`,
+    children: entries.map((e) => makeEntryNode(serverId, e))
   }
+
+  const dirCount = entries.filter((e) => e.isDirectory).length
+  const fileCount = entries.length - dirCount
 
   return {
     root,
-    statsText: `${dirs.length} 个顶级文件夹 · 点击节点展开下一层`
+    statsText: `${dirCount} 个文件夹 · ${fileCount} 个文件 · 点击节点展开/收起`
   }
 }

@@ -102,7 +102,8 @@
                 :transform="`translate(${node.width / 2 - 9}, ${node.height / 2})`"
               >
                 <circle r="7" />
-                <path d="M -3.2 0 H 3.2 M 0 -3.2 V 3.2" />
+                <path v-if="!node.expanded" d="M -3.2 0 H 3.2 M 0 -3.2 V 3.2" />
+                <path v-else d="M -3.2 0 H 3.2" />
               </g>
               <title>{{ node.title }}</title>
             </g>
@@ -353,10 +354,59 @@ function endPointer() {
 /* ---------------- 懒加载展开 ---------------- */
 const expandingId = ref(null)
 
+/**
+ * 展开/收起后布局会变大或变小。
+ * 能放下就只重新居中(保持缩放, 避免每次点击都缩放); 放不下才整体适配。
+ */
+function recenterAfterLayout() {
+  const vp = viewportRef.value
+  const b = contentBounds()
+  if (!vp || !b) return
+  const vw = vp.clientWidth
+  const vh = vp.clientHeight
+  const needW = b.w * scale.value
+  const needH = b.h * scale.value
+  if (needW > vw - 24 || needH > vh - 24) {
+    fitToView()
+    return
+  }
+  view.value = {
+    x: (vw - needW) / 2 - b.minX * scale.value,
+    y: (vh - needH) / 2 - b.minY * scale.value
+  }
+}
+
+/**
+ * 点击节点: 未展开则展开, 已展开则收起。
+ * 收起时不丢弃已加载的子节点, 缓存起来下次直接复原, 避免重复请求。
+ */
 async function handleNodeActivate(nodeId) {
   const node = findRawNode(currentRoot, nodeId)
-  if (!node || !node.expandable || node.expanded || expandingId.value) return
+  if (!node || !node.expandable || expandingId.value) return
 
+  // 已展开 -> 收起
+  if (node.expanded) {
+    node._cachedChildren = node.children
+    node.children = []
+    node.expanded = false
+    applyLayout()
+    updateStats()
+    recenterAfterLayout()
+    return
+  }
+
+  // 有缓存 -> 直接复原
+  if (node._cachedChildren) {
+    node.children = node._cachedChildren
+    node._cachedChildren = null
+    node.expanded = true
+    applyLayout()
+    updateStats()
+    recenterAfterLayout()
+    return
+  }
+
+  // 首次展开 -> 拉取
   expandingId.value = nodeId
   try {
     const children = node.loadChildren ? await node.loadChildren() : []
@@ -368,6 +418,7 @@ async function handleNodeActivate(nodeId) {
     }
     applyLayout()
     updateStats()
+    recenterAfterLayout()
   } catch (e) {
     ElMessage.error('展开失败: ' + (e.message || '未知错误'))
   } finally {
@@ -389,12 +440,14 @@ function findRawNode(node, id) {
 function updateStats() {
   if (!currentRoot) return
   let dirs = 0
-  const walk = (n, isRoot) => {
-    if (!isRoot && n.id !== 'server') dirs++
-    ;(n.children || []).forEach((c) => walk(c, false))
+  let files = 0
+  const walk = (n) => {
+    if (n.type === 'branch') dirs++
+    if (n.type === 'leaf') files++
+    ;(n.children || []).forEach(walk)
   }
-  walk(currentRoot, true)
-  statsText.value = `${dirs} 个文件夹 · 点击节点展开下一层`
+  walk(currentRoot)
+  statsText.value = `${dirs} 个文件夹 · ${files} 个文件 · 点击节点展开/收起`
 }
 
 /* ---------------- 缩放 ---------------- */

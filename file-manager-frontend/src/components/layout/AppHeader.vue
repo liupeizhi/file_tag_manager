@@ -108,8 +108,8 @@
     <RelationGraphDialog
       ref="dirGraphRef"
       title="目录节点关系图"
-      hint="原点 → 服务器 → 目录层级"
-      root-label="原点"
+      hint="服务器根目录 → 目录与文件"
+      root-label="服务器"
       :legend-items="dirLegend"
       :loader="loadDirGraph"
     />
@@ -139,8 +139,8 @@ const tagLegend = [
   { label: '标签', dotClass: 'dot-tag' }
 ]
 const dirLegend = [
-  { label: '服务器', dotClass: 'dot-group' },
-  { label: '文件夹', dotClass: 'dot-tag' }
+  { label: '文件夹', dotClass: 'dot-group' },
+  { label: '文件', dotClass: 'dot-tag' }
 ]
 
 /** 目录关系图按当前服务器加载; 未选服务器时给出空树 */

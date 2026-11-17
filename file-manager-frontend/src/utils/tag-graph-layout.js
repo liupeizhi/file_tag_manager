@@ -28,7 +28,8 @@ const GROUP_WIDTH = 124
 const PADDING = 48
 const H_GAP = 18        // 树形兄弟节点间距
 const V_GAP = 64        // 树形层级间距
-const RADIUS_STEP = 142 // 雪花型每层半径
+const RADIUS_STEP = 142 // 雪花型每层最小半径
+const MIN_ARC = 140      // 同层每个节点需要的最小弧长(约等于盒子宽度+间距)
 
 export function nodeWidth(node) {
   if (node.type === 'root') return ROOT_WIDTH
@@ -136,16 +137,30 @@ function layoutTree(root, horizontal) {
 function layoutSnowflake(root) {
   assignLeaves(root)
 
+  // 统计每层节点数: 同层节点过多时按弧长要求放大半径, 否则盒子会互相重叠
+  const perDepth = new Map()
+  const countDepth = (node, d) => {
+    perDepth.set(d, (perDepth.get(d) || 0) + 1)
+    ;(node.children || []).forEach((c) => countDepth(c, d + 1))
+  }
+  countDepth(root, 0)
+
+  const radiusAt = (d) => {
+    const count = perDepth.get(d) || 1
+    const byArc = (count * MIN_ARC) / (2 * Math.PI)
+    return Math.max(d * RADIUS_STEP, byArc)
+  }
+
   const nodes = []
   const links = []
 
   const maxDepth = depthOf(root)
-  const center = maxDepth * RADIUS_STEP + PADDING
+  const center = radiusAt(maxDepth) + PADDING
   const total = center * 2
 
   const place = (node, a0, a1, depth) => {
     const angle = (a0 + a1) / 2
-    const r = depth * RADIUS_STEP
+    const r = radiusAt(depth)
     const cx = depth === 0 ? center : center + r * Math.cos(angle)
     const cy = depth === 0 ? center : center + r * Math.sin(angle)
     // 记录的是盒子顶部中心, 所以把圆心对齐到节点中线

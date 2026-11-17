@@ -244,15 +244,19 @@ public class FileService {
      * 递归取目录树(只含文件夹), 用于「目录关系图」。
      * 受 maxDepth 与 maxNodes 双重限制, 避免超大 NAS 目录导致长时间阻塞。
      */
-    public List<FileDTO> getDirectoryTree(Long serverId, String path, int maxDepth, int maxNodes) {
+    public List<FileDTO> getDirectoryTree(Long serverId, String path, int maxDepth, int maxNodes,
+                                         boolean includeFiles, int maxFilesPerDir) {
         ServerConfig server = getServer(serverId);
         FileProtocolService service = getProtocolService(server);
         int[] budget = { Math.max(1, maxNodes) };
-        return collectDirectories(service, server, path, 0, Math.max(1, maxDepth), budget);
+        int[] fileBudget = { Math.max(0, maxFilesPerDir) };
+        return collectDirectories(service, server, path, 0, Math.max(1, maxDepth),
+                budget, includeFiles, fileBudget);
     }
 
     private List<FileDTO> collectDirectories(FileProtocolService service, ServerConfig server,
-                                             String path, int depth, int maxDepth, int[] budget) {
+                                             String path, int depth, int maxDepth,
+                                             int[] budget, boolean includeFiles, int[] fileBudget) {
         List<FileDTO> result = new ArrayList<>();
         if (depth >= maxDepth) {
             return result;
@@ -260,16 +264,26 @@ public class FileService {
         try {
             List<FileResource> resources = service.listFiles(server, path);
             for (FileResource resource : resources) {
+                if (resource.getPath().equals(path)) {
+                    continue;
+                }
+                if (!resource.isDirectory()) {
+                    // 文件只作为叶子节点, 且受每层文件数限制
+                    if (!includeFiles || fileBudget[0] <= 0) {
+                        continue;
+                    }
+                    fileBudget[0]--;
+                    result.add(toDTO(resource, server.getId()));
+                    continue;
+                }
                 if (budget[0] <= 0) {
                     break;
-                }
-                if (!resource.isDirectory() || resource.getPath().equals(path)) {
-                    continue;
                 }
                 budget[0]--;
                 FileDTO dto = toDTO(resource, server.getId());
                 List<FileDTO> children = collectDirectories(
-                        service, server, resource.getPath(), depth + 1, maxDepth, budget);
+                        service, server, resource.getPath(), depth + 1, maxDepth,
+                        budget, includeFiles, fileBudget);
                 dto.setChildren(children);
                 if (budget[0] <= 0 && !children.isEmpty()) {
                     dto.setTruncated(true);

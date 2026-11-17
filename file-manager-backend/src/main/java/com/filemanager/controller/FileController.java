@@ -44,16 +44,20 @@ public class FileController {
     }
 
     /**
-     * 递归目录树(仅文件夹), 供关系图使用。
-     * maxDepth 默认 6 层, maxNodes 默认 400 个节点, 防止超大目录拖死。
+     * 递归取目录树, 供关系图使用(懒加载时 maxDepth 传 1)。
+     * includeFiles=true 时文件也作为叶子节点返回, 每个目录最多 maxFilesPerDir 个;
+     * maxDepth / maxNodes 用于防止超大目录拖死。
      */
     @GetMapping("/directory-tree")
     public ApiResponse<List<FileDTO>> getDirectoryTree(
             @RequestParam Long serverId,
             @RequestParam(defaultValue = "/") String path,
             @RequestParam(defaultValue = "5") Integer maxDepth,
-            @RequestParam(defaultValue = "180") Integer maxNodes) {
-        return ApiResponse.success(fileService.getDirectoryTree(serverId, path, maxDepth, maxNodes));
+            @RequestParam(defaultValue = "180") Integer maxNodes,
+            @RequestParam(defaultValue = "true") Boolean includeFiles,
+            @RequestParam(defaultValue = "60") Integer maxFilesPerDir) {
+        return ApiResponse.success(fileService.getDirectoryTree(
+                serverId, path, maxDepth, maxNodes, includeFiles, maxFilesPerDir));
     }
     
     @GetMapping
