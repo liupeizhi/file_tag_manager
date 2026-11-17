@@ -372,6 +372,7 @@
 import { ref, computed, watch } from 'vue'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
+import { useHistoryStore } from '@/store/history'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Folder, Document, Picture, VideoPlay, Headset, Search, Setting, 
@@ -386,6 +387,7 @@ import FileUpload from './FileUpload.vue'
 
 const serverStore = useServerStore()
 const fileStore = useFileStore()
+const historyStore = useHistoryStore()
 
 const emit = defineEmits(['preview'])
 
@@ -525,6 +527,35 @@ async function createFolder() {
   }
 }
 
+/** 实时目录名(根目录特殊处理), 供访问历史使用 */
+function displayNameOfPath(path) {
+  if (!path || path === '/') return '根目录'
+  const parts = path.split('/').filter(Boolean)
+  return parts.length ? parts[parts.length - 1] : '根目录'
+}
+
+function recordDirectoryVisit(path) {
+  const server = serverStore.currentServer
+  if (!server || !path) return
+  historyStore.record({
+    serverId: server.id,
+    path,
+    name: displayNameOfPath(path),
+    isDirectory: true
+  })
+}
+
+function recordFileVisit(file) {
+  const server = serverStore.currentServer
+  if (!server || !file || !file.path) return
+  historyStore.record({
+    serverId: server.id,
+    path: file.path,
+    name: file.name,
+    isDirectory: false
+  })
+}
+
 function navigateTo(path) {
   if (isTagFilterMode.value) {
     exitTagFilterMode()
@@ -532,6 +563,7 @@ function navigateTo(path) {
   if (serverStore.currentServer && path !== fileStore.currentPath) {
     fileStore.setPath(path)
     fileStore.loadFileList(serverStore.currentServer.id, path)
+    recordDirectoryVisit(path)
   }
 }
 
@@ -606,6 +638,7 @@ function handleRowClick(row) {
     if (serverStore.currentServer) {
       fileStore.loadFileList(serverStore.currentServer.id, row.path)
     }
+    recordDirectoryVisit(row.path)
   }
 }
 
@@ -618,7 +651,9 @@ function handleGridItemClick(file) {
     if (serverStore.currentServer) {
       fileStore.loadFileList(serverStore.currentServer.id, file.path)
     }
+    recordDirectoryVisit(file.path)
   } else {
+    recordFileVisit(file)
     emit('preview', file)
   }
 }
@@ -662,6 +697,7 @@ function handleContextMenuCommand(command) {
 }
 
 function handlePreview(row) {
+  recordFileVisit(row)
   emit('preview', row)
 }
 
@@ -1013,7 +1049,8 @@ function handleTagPageSizeChange(size) {
 defineExpose({
   setTagFilterMode,
   setTagFilteredFiles,
-  exitTagFilterMode
+  exitTagFilterMode,
+  navigateTo
 })
 </script>
 

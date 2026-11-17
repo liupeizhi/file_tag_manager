@@ -32,6 +32,12 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(422, e.getMessage());
     }
 
+    @ExceptionHandler(AccessHistoryException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleAccessHistoryException(AccessHistoryException e) {
+        return ApiResponse.error(400, e.getMessage());
+    }
+
     @ExceptionHandler(ClientAbortException.class)
     public void handleClientAbortException(ClientAbortException e) {
     }

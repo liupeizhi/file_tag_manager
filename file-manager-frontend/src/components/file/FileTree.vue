@@ -31,11 +31,13 @@
 import { computed } from 'vue'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
+import { useHistoryStore } from '@/store/history'
 import { Folder, Document, Picture, VideoPlay, Headset } from '@element-plus/icons-vue'
 import { getFileTypeInfo } from '@/utils/file-type'
 
 const serverStore = useServerStore()
 const fileStore = useFileStore()
+const historyStore = useHistoryStore()
 
 const defaultProps = {
   children: 'children',
@@ -84,6 +86,12 @@ async function handleNodeClick(data) {
   if (serverStore.currentServer) {
     fileStore.setPath(data.path)
     await fileStore.loadFileList(serverStore.currentServer.id, data.path)
+    historyStore.record({
+      serverId: serverStore.currentServer.id,
+      path: data.path,
+      name: data.path === '/' ? '根目录' : data.name,
+      isDirectory: true
+    })
   }
 }
 

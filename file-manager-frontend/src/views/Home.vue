@@ -11,6 +11,9 @@
             <el-tab-pane label="标签" name="tags">
               <TagTree ref="tagTreeRef" @tag-click="handleTagClick" />
             </el-tab-pane>
+            <el-tab-pane label="访问历史" name="history">
+              <HistoryList @navigate="handleHistoryNavigate" @preview="handleHistoryPreview" />
+            </el-tab-pane>
           </el-tabs>
         </div>
         <div class="collapse-btn" @click="toggleSidebar" v-show="!isSidebarCollapsed">
@@ -47,17 +50,21 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import FileTree from '@/components/file/FileTree.vue'
 import FileList from '@/components/file/FileList.vue'
 import TagTree from '@/components/tag/TagTree.vue'
+import HistoryList from '@/components/history/HistoryList.vue'
 import FilePreview from '@/components/preview/FilePreview.vue'
 import { getFilesByTagWithDetails } from '@/api/tag'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
+import { useHistoryStore } from '@/store/history'
 
 const serverStore = useServerStore()
 const fileStore = useFileStore()
+const historyStore = useHistoryStore()
 
 const sidebarTab = ref('directory')
 const showPreview = ref(false)
@@ -74,6 +81,10 @@ const maxSidebarWidth = 500
 watch(sidebarTab, (newVal) => {
   if (newVal === 'directory' && fileListRef.value) {
     fileListRef.value.exitTagFilterMode()
+  }
+  if (newVal === 'history') {
+    // 切到历史页时刷新一次, 兜住其它标签页/设备产生的变更
+    historyStore.load(true)
   }
 })
 
@@ -95,6 +106,34 @@ async function handleTagClick(tag) {
 function handlePreview(file) {
   previewFile.value = file
   showPreview.value = true
+}
+
+/**
+ * 把当前服务器切到历史条目所属的那台; 服务器已被删除时给出提示。
+ */
+function ensureServerOf(item) {
+  const current = serverStore.currentServer
+  if (current && current.id === item.serverId) return true
+
+  const server = serverStore.servers.find((s) => s.id === item.serverId)
+  if (!server) {
+    ElMessage.warning('该记录所属的服务器已不存在')
+    return false
+  }
+  serverStore.setCurrentServer(server)
+  fileStore.setPath('/')
+  fileStore.loadTree(server.id, '/')
+  return true
+}
+
+function handleHistoryNavigate(item) {
+  if (!ensureServerOf(item)) return
+  fileListRef.value?.navigateTo(item.path)
+}
+
+function handleHistoryPreview(item) {
+  if (!ensureServerOf(item)) return
+  handlePreview({ path: item.path, name: item.name, isDirectory: false })
 }
 
 function handleFileChange(newFile) {
