@@ -38,6 +38,12 @@ public class GlobalExceptionHandler {
         return ApiResponse.error(400, e.getMessage());
     }
 
+    @ExceptionHandler(FavoriteException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse<Void> handleFavoriteException(FavoriteException e) {
+        return ApiResponse.error(400, e.getMessage());
+    }
+
     @ExceptionHandler(ClientAbortException.class)
     public void handleClientAbortException(ClientAbortException e) {
     }

@@ -177,6 +177,24 @@
         </template>
       </el-table-column>
       
+      <el-table-column label="收藏" width="70" align="center">
+        <template #default="{ row }">
+          <el-tooltip
+            :content="isFavorited(row) ? '取消收藏' : '收藏'"
+            placement="top"
+          >
+            <svg
+              class="heart-btn"
+              :class="{ active: isFavorited(row) }"
+              viewBox="0 0 24 24"
+              @click.stop="handleToggleFavorite(row)"
+            >
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+            </svg>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link @click="handlePreview(row)" v-if="!row.isDirectory">
@@ -373,11 +391,12 @@ import { ref, computed, watch } from 'vue'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
 import { useHistoryStore } from '@/store/history'
+import { useFavoriteStore } from '@/store/favorite'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Folder, Document, Picture, VideoPlay, Headset, Search, Setting, 
   FolderAdd, Upload, List, Grid, FolderOpened, View, Download, 
-  Edit, Delete, Plus, Refresh, InfoFilled, PriceTag
+  Edit, Delete, Plus, Refresh, InfoFilled, PriceTag, Star, StarFilled
 } from '@element-plus/icons-vue'
 import { getFileTypeInfo, formatFileSize } from '@/utils/file-type'
 import { formatDate } from '@/utils/date-format'
@@ -388,6 +407,7 @@ import FileUpload from './FileUpload.vue'
 const serverStore = useServerStore()
 const fileStore = useFileStore()
 const historyStore = useHistoryStore()
+const favoriteStore = useFavoriteStore()
 
 const emit = defineEmits(['preview'])
 
@@ -496,6 +516,9 @@ watch(fileList, async () => {
   }
 }, { immediate: true })
 
+// 收藏列表加载一次即可(接口返回所有服务器下的收藏), 列表逐行靠本地 Set 判断
+favoriteStore.load()
+
 watch(searchKeyword, () => {
   if (isTagFilterMode.value) {
     tagFilterPage.value = 1
@@ -532,6 +555,26 @@ function displayNameOfPath(path) {
   if (!path || path === '/') return '根目录'
   const parts = path.split('/').filter(Boolean)
   return parts.length ? parts[parts.length - 1] : '根目录'
+}
+
+function isFavorited(row) {
+  return favoriteStore.isFavorite(serverStore.currentServer?.id, row.path)
+}
+
+async function handleToggleFavorite(row) {
+  const serverId = serverStore.currentServer?.id
+  if (!serverId) return
+  try {
+    const favorited = await favoriteStore.toggle({
+      serverId,
+      path: row.path,
+      name: row.name,
+      isDirectory: !!row.isDirectory
+    })
+    ElMessage.success(favorited ? '已收藏' : '已取消收藏')
+  } catch (e) {
+    ElMessage.error('操作失败: ' + (e.message || '未知错误'))
+  }
 }
 
 function recordDirectoryVisit(path) {
@@ -1279,6 +1322,27 @@ defineExpose({
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
+}
+
+.heart-btn {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  cursor: pointer;
+  transition: fill var(--transition-fast), stroke var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.heart-btn:hover {
+  stroke: #f56c6c;
+  transform: scale(1.15);
+}
+
+.heart-btn.active {
+  fill: #f56c6c;
+  stroke: #f56c6c;
 }
 
 .file-tag {

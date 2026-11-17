@@ -11,8 +11,11 @@
             <el-tab-pane label="标签" name="tags">
               <TagTree ref="tagTreeRef" @tag-click="handleTagClick" />
             </el-tab-pane>
-            <el-tab-pane label="访问历史" name="history">
+            <el-tab-pane label="历史" name="history">
               <HistoryList @navigate="handleHistoryNavigate" @preview="handleHistoryPreview" />
+            </el-tab-pane>
+            <el-tab-pane label="收藏" name="favorites">
+              <FavoriteList @navigate="handleHistoryNavigate" @preview="handleHistoryPreview" />
             </el-tab-pane>
           </el-tabs>
         </div>
@@ -56,15 +59,18 @@ import FileTree from '@/components/file/FileTree.vue'
 import FileList from '@/components/file/FileList.vue'
 import TagTree from '@/components/tag/TagTree.vue'
 import HistoryList from '@/components/history/HistoryList.vue'
+import FavoriteList from '@/components/favorite/FavoriteList.vue'
 import FilePreview from '@/components/preview/FilePreview.vue'
 import { getFilesByTagWithDetails } from '@/api/tag'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
 import { useHistoryStore } from '@/store/history'
+import { useFavoriteStore } from '@/store/favorite'
 
 const serverStore = useServerStore()
 const fileStore = useFileStore()
 const historyStore = useHistoryStore()
+const favoriteStore = useFavoriteStore()
 
 const sidebarTab = ref('directory')
 const showPreview = ref(false)
@@ -85,6 +91,9 @@ watch(sidebarTab, (newVal) => {
   if (newVal === 'history') {
     // 切到历史页时刷新一次, 兜住其它标签页/设备产生的变更
     historyStore.load(true)
+  }
+  if (newVal === 'favorites') {
+    favoriteStore.load(true)
   }
 })
 
