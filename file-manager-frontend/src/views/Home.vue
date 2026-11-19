@@ -45,6 +45,7 @@
           @preview="handlePreview"
           @open-dir-graph="openCurrentDirGraph"
           @open-tag-graph="openCurrentTagGraph"
+          @open-file-graph="openFileGraph"
         />
       </div>
     </div>
@@ -73,6 +74,16 @@
       :legend-items="dirLegend"
       :loader="loadDirectoryGraph"
     />
+
+    <RelationGraphDialog
+      ref="fileGraphRef"
+      title="文件关系图"
+      hint="文件 → 所在目录层级 / 所属标签层级"
+      root-label="文件"
+      default-layout="tree"
+      :legend-items="fileLegend"
+      :loader="loadFileGraph"
+    />
   </div>
 </template>
 
@@ -88,7 +99,7 @@ import HistoryList from '@/components/history/HistoryList.vue'
 import FavoriteList from '@/components/favorite/FavoriteList.vue'
 import FilePreview from '@/components/preview/FilePreview.vue'
 import RelationGraphDialog from '@/components/graph/RelationGraphDialog.vue'
-import { loadTagGraph, loadDirectoryGraph } from '@/utils/graph-loaders'
+import { loadTagGraph, loadDirectoryGraph, loadFileGraph } from '@/utils/graph-loaders'
 import { getFilesByTagWithDetails } from '@/api/tag'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
@@ -108,6 +119,7 @@ const fileListRef = ref(null)
 
 const tagGraphRef = ref(null)
 const dirGraphRef = ref(null)
+const fileGraphRef = ref(null)
 
 const tagLegend = [
   { label: '标签组', dotClass: 'dot-group' },
@@ -116,6 +128,10 @@ const tagLegend = [
 const dirLegend = [
   { label: '文件夹', dotClass: 'dot-group' },
   { label: '文件', dotClass: 'dot-tag' }
+]
+const fileLegend = [
+  { label: '目录', dotClass: 'dot-group' },
+  { label: '标签', dotClass: 'dot-tag' }
 ]
 
 /** 顶栏: 标签关系图 */
@@ -137,6 +153,22 @@ function openServerDirGraph() {
 function openCurrentTagGraph(tag) {
   if (!tag) return
   tagGraphRef.value?.open({ tagId: tag.id })
+}
+
+/** 文件列表: 以该文件为根, 看它所在的目录层级和标签层级 */
+function openFileGraph(file) {
+  const server = serverStore.currentServer
+  if (!server) {
+    ElMessage.warning('请先选择服务器')
+    return
+  }
+  if (!file || !file.path) return
+  fileGraphRef.value?.open({
+    filePath: file.path,
+    fileName: file.name,
+    serverId: server.id,
+    serverName: server.name
+  })
 }
 
 /** 文件列表: 当前所在目录的目录关系图 */

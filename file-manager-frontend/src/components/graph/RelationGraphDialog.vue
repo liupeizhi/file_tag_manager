@@ -143,7 +143,9 @@ const props = defineProps({
    * loader 需返回 { root, statsText }
    * root: { id, label, type:'root'|'branch'|'leaf', color, title, children: [] }
    */
-  loader: { type: Function, required: true }
+  loader: { type: Function, required: true },
+  /** 打开时使用的初始布局; 文件关系图这种纯层级树用树形更清楚 */
+  defaultLayout: { type: String, default: 'snowflake' }
 })
 
 const visible = ref(false)
@@ -489,6 +491,7 @@ function fitToView() {
 
 function open(options = {}) {
   openOptions.value = options
+  layoutMode.value = props.defaultLayout
   visible.value = true
 }
 

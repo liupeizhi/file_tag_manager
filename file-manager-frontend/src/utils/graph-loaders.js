@@ -9,7 +9,7 @@
  * 目录图采用懒加载: 初始只取一层, 节点上的 loadChildren 在展开时才拉取下一层。
  */
 
-import { getTagGroups } from '@/api/tag'
+import { getTagGroups, getFilesByTagWithDetails, getFileTags } from '@/api/tag'
 import { getDirectoryTree } from '@/api/file'
 import { getFileTypeInfo } from '@/utils/file-type'
 
@@ -203,5 +203,153 @@ export async function loadDirectoryGraph(opts = {}) {
       ? '服务器根目录 → 目录与文件'
       : `当前目录：${basePath.replace(/\/+$/, '') || '/'}`,
     statsText: `${dirCount} 个文件夹 · ${fileCount} 个文件${fileCapped ? '+' : ''} · 点击节点展开/收起`
+  }
+}
+
+/* ---------------- 文件关系图 ---------------- */
+/**
+ * 文件关系图: 以文件为根节点, 向下挂两棵"所属"子树 ——
+ *
+ *   文件
+ *   ├── 所在目录: 服务器根 → 各级目录 → 文件所在目录
+ *   └── 所属标签: 标签组 → 各级上级标签 → 文件直接打上的标签
+ *
+ * 只看层级, 不在图里展开兄弟文件, 避免和上下级重复。
+ *
+ * @param {object} opts
+ *   filePath   文件完整路径
+ *   fileName   文件名(不给就从路径里取)
+ *   serverId   服务器 id
+ *   serverName 服务器名
+ */
+export async function loadFileGraph(opts = {}) {
+  const { filePath, fileName, serverId, serverName } = opts
+  if (!filePath || serverId == null) {
+    return { root: null, statsText: '' }
+  }
+
+  const [fileTags, groups] = await Promise.all([
+    getFileTags(filePath, serverId).catch(() => []),
+    getTagGroups().catch(() => [])
+  ])
+  const tags = Array.isArray(fileTags) ? fileTags : []
+
+  const root = {
+    id: 'file-root',
+    label: fileName || nameOfPath(filePath),
+    type: 'root',
+    color: '#909399',
+    title: filePath,
+    children: []
+  }
+
+  /* --- 目录层级: 自上而下从服务器根排到文件所在目录 --- */
+  const segments = String(filePath).split('/').filter(Boolean)
+  const dirSegments = segments.slice(0, -1) // 最后一段是文件名
+
+  const dirRoot = {
+    id: 'dir-server',
+    label: serverName || '/',
+    type: 'branch',
+    color: '#909399',
+    title: serverName ? `${serverName} · 根目录` : '服务器根目录',
+    children: []
+  }
+  let cursor = dirRoot
+  let acc = ''
+  for (const seg of dirSegments) {
+    acc += `/${seg}`
+    const child = {
+      id: `dir-${acc}`,
+      label: seg,
+      type: 'branch',
+      color: '#909399',
+      title: acc,
+      children: []
+    }
+    cursor.children.push(child)
+    cursor = child
+  }
+
+  root.children.push({
+    id: 'branch-dir',
+    label: '所在目录',
+    type: 'branch',
+    color: '#909399',
+    title: `${dirSegments.length + 1} 层目录`,
+    children: [dirRoot]
+  })
+
+  /* --- 标签层级: 从分组树里只留下与该文件相关的分支 --- */
+  // 先记下每个标签的祖先链, 用来判断哪些分支要保留
+  const ancestorOf = new Map()
+  for (const group of groups || []) {
+    const walk = (nodes, chain) => {
+      for (const tag of nodes || []) {
+        const next = [...chain, tag.id]
+        ancestorOf.set(tag.id, next)
+        walk(tag.children, next)
+      }
+    }
+    walk(group.tags, [])
+  }
+
+  const keepTagIds = new Set()
+  for (const tag of tags) {
+    const chain = ancestorOf.get(tag.id) || [tag.id]
+    chain.forEach((id) => keepTagIds.add(id))
+  }
+
+  const mapTag = (tag) => {
+    if (!keepTagIds.has(tag.id)) return null
+    const children = (tag.children || []).map(mapTag).filter(Boolean)
+    return {
+      id: `tag-${tag.id}`,
+      label: tag.name,
+      type: 'tag',
+      color: tag.color || '#909399',
+      title: tag.name,
+      children
+    }
+  }
+
+  const tagBranches = []
+  for (const group of groups || []) {
+    const children = (group.tags || []).map(mapTag).filter(Boolean)
+    if (!children.length) continue
+    tagBranches.push({
+      id: `group-${group.id}`,
+      label: group.name,
+      type: 'branch',
+      color: '#909399',
+      title: `${group.name}（${children.length} 个分支）`,
+      children
+    })
+  }
+
+  if (!tagBranches.length) {
+    tagBranches.push({
+      id: 'no-tags',
+      label: '（未打标签）',
+      type: 'leaf',
+      color: '#909399',
+      title: '该文件还没有标签',
+      children: []
+    })
+  }
+
+  root.children.push({
+    id: 'branch-tag',
+    label: '所属标签',
+    type: 'branch',
+    color: '#909399',
+    title: `${tags.length} 个标签`,
+    children: tagBranches
+  })
+
+  return {
+    root,
+    hint: '文件 → 所在目录层级 / 所属标签层级',
+    statsText: `${dirSegments.length + 1} 层目录 · ${tags.length} 个标签`
   }
 }

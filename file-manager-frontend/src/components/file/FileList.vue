@@ -224,6 +224,16 @@
         </template>
       </el-table-column>
 
+      <el-table-column label="关系" width="64" align="center">
+        <template #default="{ row }">
+          <el-tooltip content="查看该文件的目录与标签关系" placement="top">
+            <button class="row-graph-btn" @click.stop="emit('open-file-graph', row)">
+              <el-icon :size="14"><Share /></el-icon>
+            </button>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button link @click="handlePreview(row)" v-if="!row.isDirectory">
@@ -426,7 +436,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Folder, Document, Picture, VideoPlay, Headset, Search, Setting, 
   FolderAdd, Upload, List, Grid, FolderOpened, View, Download, 
-  Edit, Delete, Plus, Refresh, InfoFilled, PriceTag, Star, StarFilled, Connection
+  Edit, Delete, Plus, Refresh, InfoFilled, PriceTag, Star, StarFilled, Connection, Share
 } from '@element-plus/icons-vue'
 import { getFileTypeInfo, formatFileSize } from '@/utils/file-type'
 import { formatDate } from '@/utils/date-format'
@@ -439,7 +449,7 @@ const fileStore = useFileStore()
 const historyStore = useHistoryStore()
 const favoriteStore = useFavoriteStore()
 
-const emit = defineEmits(['preview', 'open-dir-graph', 'open-tag-graph'])
+const emit = defineEmits(['preview', 'open-dir-graph', 'open-tag-graph', 'open-file-graph'])
 
 const showUploadDialog = ref(false)
 const showCreateFolderDialog = ref(false)
@@ -1267,6 +1277,28 @@ defineExpose({
   cursor: pointer;
   transition: color var(--transition-fast), border-color var(--transition-fast),
     background var(--transition-fast);
+}
+
+.row-graph-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-input);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.row-graph-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  background: var(--bg-secondary);
 }
 
 .path-graph-btn:hover {
