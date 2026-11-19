@@ -21,8 +21,20 @@
           </el-breadcrumb>
         </template>
 
+        <!-- 标签模式: 看当前标签的关系图 -->
         <el-tooltip
-          v-if="!isTagFilterMode && serverStore.currentServer"
+          v-if="isTagFilterMode && currentTagFilter"
+          content="查看当前标签的关系图"
+          placement="bottom"
+        >
+          <button class="path-graph-btn path-graph-btn--tag" @click="emit('open-tag-graph', currentTagFilter)">
+            <el-icon :size="13"><Connection /></el-icon>
+          </button>
+        </el-tooltip>
+
+        <!-- 目录模式: 看当前目录的关系图 -->
+        <el-tooltip
+          v-else-if="serverStore.currentServer"
           content="查看当前目录的关系图"
           placement="bottom"
         >
@@ -427,7 +439,7 @@ const fileStore = useFileStore()
 const historyStore = useHistoryStore()
 const favoriteStore = useFavoriteStore()
 
-const emit = defineEmits(['preview', 'open-dir-graph'])
+const emit = defineEmits(['preview', 'open-dir-graph', 'open-tag-graph'])
 
 const showUploadDialog = ref(false)
 const showCreateFolderDialog = ref(false)

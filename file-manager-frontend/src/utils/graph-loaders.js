@@ -18,8 +18,25 @@ const ROOT_ID = 'root'
 const MAX_FILES_PER_DIR = 60
 
 /* ---------------- 标签关系图 ---------------- */
-export async function loadTagGraph() {
+function findTag(tags, id) {
+  for (const tag of tags || []) {
+    if (tag.id === id) return tag
+    const found = findTag(tag.children, id)
+    if (found) return found
+  }
+  return null
+}
+
+/**
+ * 标签关系图。
+ *
+ * @param {object} opts
+ *   tagId  可选; 传了就只画该标签及其下级(从标签面板点开时用),
+ *          不传则画全部: 原点 → 标签组 → 标签层级
+ */
+export async function loadTagGraph(opts = {}) {
   const groups = (await getTagGroups()) || []
+  const { tagId } = opts
 
   let tagCount = 0
   const mapTag = (tag) => {
@@ -34,6 +51,31 @@ export async function loadTagGraph() {
     }
   }
 
+  // 指定标签 -> 以该标签为根
+  if (tagId != null) {
+    const target = findTag(
+      groups.flatMap((g) => g.tags || []),
+      tagId
+    )
+    if (!target) {
+      return { root: null, statsText: '未找到该标签' }
+    }
+    const root = {
+      id: `tag-${target.id}`,
+      label: target.name,
+      type: 'root',
+      color: target.color || '#909399',
+      title: target.name,
+      children: (target.children || []).map(mapTag)
+    }
+    return {
+      root,
+      hint: `当前标签：${target.name}`,
+      statsText: `${tagCount} 个下级标签`
+    }
+  }
+
+  // 全部标签
   // 先构造 root(触发 mapTag 累加), 再读 tagCount
   const root = {
     id: ROOT_ID,

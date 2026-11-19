@@ -44,6 +44,7 @@
           ref="fileListRef"
           @preview="handlePreview"
           @open-dir-graph="openCurrentDirGraph"
+          @open-tag-graph="openCurrentTagGraph"
         />
       </div>
     </div>
@@ -130,6 +131,12 @@ function openServerDirGraph() {
     serverName: server ? server.name : '',
     basePath: '/'
   })
+}
+
+/** 文件列表: 当前标签的关系图(只看该标签及其下级) */
+function openCurrentTagGraph(tag) {
+  if (!tag) return
+  tagGraphRef.value?.open({ tagId: tag.id })
 }
 
 /** 文件列表: 当前所在目录的目录关系图 */
