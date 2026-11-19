@@ -31,10 +31,45 @@ const V_GAP = 64        // 树形层级间距
 const RADIUS_STEP = 142 // 雪花型每层最小半径
 const MIN_ARC = 140      // 同层每个节点需要的最小弧长(约等于盒子宽度+间距)
 
+/** 节点盒子的宽度上限 —— 文件名再长也不让它无限撑开 */
+const MAX_NODE_WIDTH = 200
+const LABEL_FONT_SIZE = 12
+const LABEL_PADDING = 28 // 左右内边距 + 展开角标的位置
+
+/** 估算一段文字在 12px 下占的宽度: 中日韩字符按全角, 其余按半角 */
+function textWidth(text) {
+  let w = 0
+  for (const ch of String(text ?? '')) {
+    w += /[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7af\uf900-\ufaff\uff00-\uff60\uffe0-\uffe6]/.test(ch)
+      ? LABEL_FONT_SIZE
+      : LABEL_FONT_SIZE * 0.56
+  }
+  return w
+}
+
+/** 按可用宽度截断文字, 超出部分用省略号(完整名字放在 <title> 里) */
+function fitLabel(text, maxWidth) {
+  const chars = [...String(text ?? '')]
+  if (textWidth(text) <= maxWidth) return chars.join('')
+  let out = ''
+  let w = 0
+  for (const ch of chars) {
+    const cw = textWidth(ch)
+    if (w + cw + LABEL_FONT_SIZE > maxWidth) break
+    w += cw
+    out += ch
+  }
+  return out ? out + '…' : chars.slice(0, 1).join('') + '…'
+}
+
 export function nodeWidth(node) {
-  if (node.type === 'root') return ROOT_WIDTH
-  if (node.type === 'group') return GROUP_WIDTH
-  return NODE_WIDTH
+  const base = node.type === 'root'
+    ? ROOT_WIDTH
+    : node.type === 'group'
+      ? GROUP_WIDTH
+      : NODE_WIDTH
+  // 短名字保持统一样式, 长名字(常见于文件名)按文字宽度撑开, 上限封顶
+  return Math.min(Math.max(base, textWidth(node.label) + LABEL_PADDING), MAX_NODE_WIDTH)
 }
 
 /* ============ 通用 ============ */
@@ -48,13 +83,15 @@ function assignLeaves(node) {
 }
 
 function emptyNode(node, x, y) {
+  const width = nodeWidth(node)
   return {
     id: node.id,
     type: node.type,
-    label: node.label,
+    // 盒子宽度定了才知道能放多少字, 超出部分截断
+    label: fitLabel(node.label, width - LABEL_PADDING),
     color: node.color,
     title: node.title,
-    width: nodeWidth(node),
+    width,
     height: NODE_HEIGHT,
     x,
     y,
