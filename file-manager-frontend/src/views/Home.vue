@@ -1,6 +1,9 @@
 <template>
   <div class="home-container">
-    <AppHeader />
+    <AppHeader
+      @open-tag-graph="openTagGraph"
+      @open-dir-graph="openServerDirGraph"
+    />
     <div class="main-content">
       <div class="sidebar-wrapper" :style="{ width: isSidebarCollapsed ? '0px' : sidebarWidth + 'px' }">
         <div class="sidebar" v-show="!isSidebarCollapsed">
@@ -37,7 +40,11 @@
         </el-icon>
       </div>
       <div class="content">
-        <FileList ref="fileListRef" @preview="handlePreview" />
+        <FileList
+          ref="fileListRef"
+          @preview="handlePreview"
+          @open-dir-graph="openCurrentDirGraph"
+        />
       </div>
     </div>
     <FilePreview 
@@ -46,6 +53,24 @@
       :server-id="serverStore.currentServer?.id"
       :directory-files="fileStore.fileList"
       @file-change="handleFileChange"
+    />
+
+    <RelationGraphDialog
+      ref="tagGraphRef"
+      title="标签节点关系图"
+      hint="原点 → 标签组 → 标签层级"
+      root-label="原点"
+      :legend-items="tagLegend"
+      :loader="loadTagGraph"
+    />
+
+    <RelationGraphDialog
+      ref="dirGraphRef"
+      title="目录节点关系图"
+      hint="服务器根目录 → 目录与文件"
+      root-label="服务器"
+      :legend-items="dirLegend"
+      :loader="loadDirectoryGraph"
     />
   </div>
 </template>
@@ -61,6 +86,8 @@ import TagTree from '@/components/tag/TagTree.vue'
 import HistoryList from '@/components/history/HistoryList.vue'
 import FavoriteList from '@/components/favorite/FavoriteList.vue'
 import FilePreview from '@/components/preview/FilePreview.vue'
+import RelationGraphDialog from '@/components/graph/RelationGraphDialog.vue'
+import { loadTagGraph, loadDirectoryGraph } from '@/utils/graph-loaders'
 import { getFilesByTagWithDetails } from '@/api/tag'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
@@ -77,6 +104,47 @@ const showPreview = ref(false)
 const previewFile = ref(null)
 const tagTreeRef = ref(null)
 const fileListRef = ref(null)
+
+const tagGraphRef = ref(null)
+const dirGraphRef = ref(null)
+
+const tagLegend = [
+  { label: '标签组', dotClass: 'dot-group' },
+  { label: '标签', dotClass: 'dot-tag' }
+]
+const dirLegend = [
+  { label: '文件夹', dotClass: 'dot-group' },
+  { label: '文件', dotClass: 'dot-tag' }
+]
+
+/** 顶栏: 标签关系图 */
+function openTagGraph() {
+  tagGraphRef.value?.open()
+}
+
+/** 顶栏: 当前服务器的目录关系图(从根目录开始) */
+function openServerDirGraph() {
+  const server = serverStore.currentServer
+  dirGraphRef.value?.open({
+    serverId: server ? server.id : null,
+    serverName: server ? server.name : '',
+    basePath: '/'
+  })
+}
+
+/** 文件列表: 当前所在目录的目录关系图 */
+function openCurrentDirGraph() {
+  const server = serverStore.currentServer
+  if (!server) {
+    ElMessage.warning('请先选择服务器')
+    return
+  }
+  dirGraphRef.value?.open({
+    serverId: server.id,
+    serverName: server.name,
+    basePath: fileStore.currentPath || '/'
+  })
+}
 
 const sidebarWidth = ref(250)
 const isResizing = ref(false)

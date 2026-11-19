@@ -36,13 +36,13 @@
       </el-select>
 
       <el-tooltip content="标签关系图" placement="bottom">
-        <el-button circle class="icon-button graph-button tag-graph-button" @click="tagGraphRef?.open()">
+        <el-button circle class="icon-button graph-button tag-graph-button" @click="emit('open-tag-graph')">
           <el-icon :size="16"><Connection /></el-icon>
         </el-button>
       </el-tooltip>
 
       <el-tooltip content="目录关系图" placement="bottom">
-        <el-button circle class="icon-button graph-button dir-graph-button" @click="dirGraphRef?.open()">
+        <el-button circle class="icon-button graph-button dir-graph-button" @click="emit('open-dir-graph')">
           <el-icon :size="16"><FolderOpened /></el-icon>
         </el-button>
       </el-tooltip>
@@ -95,59 +95,24 @@
         登录
       </el-button>
     </div>
-
-    <RelationGraphDialog
-      ref="tagGraphRef"
-      title="标签节点关系图"
-      hint="原点 → 标签组 → 标签层级"
-      root-label="原点"
-      :legend-items="tagLegend"
-      :loader="loadTagGraph"
-    />
-
-    <RelationGraphDialog
-      ref="dirGraphRef"
-      title="目录节点关系图"
-      hint="服务器根目录 → 目录与文件"
-      root-label="服务器"
-      :legend-items="dirLegend"
-      :loader="loadDirGraph"
-    />
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useServerStore } from '@/store/server'
 import { useUserStore } from '@/store/user'
 import { useFileStore } from '@/store/file'
 import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown, Switch, Brush, Connection } from '@element-plus/icons-vue'
 import ThemeSwitcher from '@/components/common/ThemeSwitcher.vue'
-import RelationGraphDialog from '@/components/graph/RelationGraphDialog.vue'
-import { loadTagGraph, loadDirectoryGraph } from '@/utils/graph-loaders'
+
+const emit = defineEmits(['open-tag-graph', 'open-dir-graph'])
 
 const router = useRouter()
 const serverStore = useServerStore()
 const userStore = useUserStore()
 const fileStore = useFileStore()
-const tagGraphRef = ref(null)
-const dirGraphRef = ref(null)
-
-const tagLegend = [
-  { label: '标签组', dotClass: 'dot-group' },
-  { label: '标签', dotClass: 'dot-tag' }
-]
-const dirLegend = [
-  { label: '文件夹', dotClass: 'dot-group' },
-  { label: '文件', dotClass: 'dot-tag' }
-]
-
-/** 目录关系图按当前服务器加载; 未选服务器时给出空树 */
-function loadDirGraph() {
-  const server = serverStore.currentServer
-  return loadDirectoryGraph(server ? server.id : null, server ? server.name : '')
-}
 
 onMounted(async () => {
   await serverStore.loadServers()

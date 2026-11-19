@@ -20,6 +20,16 @@
             </el-breadcrumb-item>
           </el-breadcrumb>
         </template>
+
+        <el-tooltip
+          v-if="!isTagFilterMode && serverStore.currentServer"
+          content="查看当前目录的关系图"
+          placement="bottom"
+        >
+          <button class="path-graph-btn" @click="emit('open-dir-graph')">
+            <el-icon :size="13"><Connection /></el-icon>
+          </button>
+        </el-tooltip>
       </div>
       
       <div class="actions">
@@ -404,7 +414,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Folder, Document, Picture, VideoPlay, Headset, Search, Setting, 
   FolderAdd, Upload, List, Grid, FolderOpened, View, Download, 
-  Edit, Delete, Plus, Refresh, InfoFilled, PriceTag, Star, StarFilled
+  Edit, Delete, Plus, Refresh, InfoFilled, PriceTag, Star, StarFilled, Connection
 } from '@element-plus/icons-vue'
 import { getFileTypeInfo, formatFileSize } from '@/utils/file-type'
 import { formatDate } from '@/utils/date-format'
@@ -417,7 +427,7 @@ const fileStore = useFileStore()
 const historyStore = useHistoryStore()
 const favoriteStore = useFavoriteStore()
 
-const emit = defineEmits(['preview'])
+const emit = defineEmits(['preview', 'open-dir-graph'])
 
 const showUploadDialog = ref(false)
 const showCreateFolderDialog = ref(false)
@@ -1226,6 +1236,31 @@ defineExpose({
 .current-path :deep(.el-breadcrumb__item:last-child) {
   flex-shrink: 1;
   min-width: 0;
+}
+
+/* 面包屑后面的"目录关系图"按钮, 做得克制些不抢视线 */
+.path-graph-btn {
+  flex-shrink: 0;
+  margin-left: 8px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-input);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.path-graph-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  background: var(--bg-secondary);
 }
 
 .current-path a {

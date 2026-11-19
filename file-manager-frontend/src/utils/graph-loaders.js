@@ -14,6 +14,8 @@ import { getDirectoryTree } from '@/api/file'
 import { getFileTypeInfo } from '@/utils/file-type'
 
 const ROOT_ID = 'root'
+/** 与后端 maxFilesPerDir 保持一致 */
+const MAX_FILES_PER_DIR = 60
 
 /* ---------------- 标签关系图 ---------------- */
 export async function loadTagGraph() {
@@ -51,6 +53,7 @@ export async function loadTagGraph() {
 
   return {
     root,
+    hint: '原点 → 标签组 → 标签层级',
     statsText: `${groups.length} 个分组 · ${tagCount} 个标签`
   }
 }
@@ -69,8 +72,8 @@ function makeDirectoryNode(serverId, dir) {
     expandable: true,
     expanded: false,
     loadChildren: async () => {
-      const sub = (await getDirectoryTree(serverId, path, 1, 500, true, 60)) || []
-      return sub.map((d) => makeEntryNode(serverId, d))
+      const sub = (await getDirectoryTree(serverId, path, 1, 500, true, MAX_FILES_PER_DIR)) || []
+      return sub.map((e) => makeEntryNode(serverId, e))
     }
   }
 }
@@ -93,32 +96,53 @@ function makeEntryNode(serverId, entry) {
     : makeFileNode(entry)
 }
 
+function nameOfPath(path) {
+  if (!path || path === '/') return '/'
+  const parts = path.split('/').filter(Boolean)
+  return parts.length ? parts[parts.length - 1] : '/'
+}
+
 /**
- * 目录图的根节点就是服务器本身 —— 目录有天然的根,
+ * 目录图。
+ *
+ * @param {object} opts
+ *   serverId   服务器 id
+ *   serverName 服务器名
+ *   basePath   起始目录, 默认根目录; 从文件列表点开时传当前路径
+ *
+ * 根节点直接用该目录本身(根目录时用服务器名) —— 目录天然有根,
  * 再套一层"原点"只会让人困惑。
  */
-export async function loadDirectoryGraph(serverId, serverName) {
+export async function loadDirectoryGraph(opts = {}) {
+  const { serverId, serverName, basePath = '/' } = opts
   if (serverId == null) {
     return { root: null, statsText: '' }
   }
 
+  const isRoot = !basePath || basePath === '/'
   // 只取第一层, 其余按需展开
-  const entries = (await getDirectoryTree(serverId, '/', 1, 500, true, 60)) || []
+  const entries = (await getDirectoryTree(serverId, basePath, 1, 500, true, MAX_FILES_PER_DIR)) || []
 
+  const rootLabel = isRoot ? (serverName || '当前服务器') : nameOfPath(basePath)
   const root = {
-    id: 'server',
-    label: serverName || '当前服务器',
+    id: isRoot ? 'server' : `dir-${basePath}`,
+    label: rootLabel,
     type: 'root',
     color: '#909399',
-    title: `${serverName || '当前服务器'} · 根目录`,
+    title: isRoot ? `${rootLabel} · 根目录` : basePath,
     children: entries.map((e) => makeEntryNode(serverId, e))
   }
 
   const dirCount = entries.filter((e) => e.isDirectory).length
   const fileCount = entries.length - dirCount
+  // 文件数触及上限时说明一下, 避免以为目录里只有这么多文件
+  const fileCapped = fileCount >= MAX_FILES_PER_DIR
 
   return {
     root,
-    statsText: `${dirCount} 个文件夹 · ${fileCount} 个文件 · 点击节点展开/收起`
+    hint: isRoot
+      ? '服务器根目录 → 目录与文件'
+      : `当前目录：${basePath.replace(/\/+$/, '') || '/'}`,
+    statsText: `${dirCount} 个文件夹 · ${fileCount} 个文件${fileCapped ? '+' : ''} · 点击节点展开/收起`
   }
 }

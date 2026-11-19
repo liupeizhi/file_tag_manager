@@ -10,7 +10,7 @@
   >
     <div class="graph-toolbar">
       <div class="graph-hint">
-        {{ hint }}
+        {{ dynamicHint || hint }}
         <span v-if="statsText" class="graph-stats">（{{ statsText }}）</span>
       </div>
       <div class="graph-actions">
@@ -147,9 +147,11 @@ const props = defineProps({
 })
 
 const visible = ref(false)
+const openOptions = ref({})
 const loading = ref(false)
 const hasData = ref(false)
 const statsText = ref('')
+const dynamicHint = ref('')
 const viewportRef = ref(null)
 
 const layoutMode = ref('snowflake')
@@ -206,9 +208,10 @@ function applyLayout() {
 async function loadData() {
   loading.value = true
   try {
-    const payload = await props.loader()
+    const payload = await props.loader(openOptions.value)
     currentRoot = payload ? payload.root : null
     statsText.value = payload ? payload.statsText || '' : ''
+    dynamicHint.value = payload ? payload.hint || '' : ''
     if (currentRoot) applyLayout()
   } catch (e) {
     ElMessage.error('加载数据失败')
@@ -499,7 +502,8 @@ function fitToView() {
   draggingId.value = null
 }
 
-function open() {
+function open(options = {}) {
+  openOptions.value = options
   visible.value = true
 }
 
