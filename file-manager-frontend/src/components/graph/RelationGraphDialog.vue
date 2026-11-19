@@ -73,10 +73,10 @@
                 :width="node.width"
                 :height="node.height"
                 rx="8"
-                :style="node.type === 'leaf' ? { stroke: node.color } : {}"
+                :style="node.type === 'leaf' || node.type === 'tag' ? { stroke: node.color } : {}"
               />
               <rect
-                v-if="node.type === 'leaf'"
+                v-if="node.type === 'leaf' || node.type === 'tag'"
                 class="node-accent"
                 :x="-node.width / 2"
                 y="0"
@@ -387,40 +387,37 @@ async function handleNodeActivate(nodeId) {
   const node = findRawNode(currentRoot, nodeId)
   if (!node || !node.expandable || expandingId.value) return
 
-  // 已展开 -> 收起
+  // 已展开 -> 收起(只移除追加出来的子节点, 保留原有层级)
   if (node.expanded) {
-    node._cachedChildren = node.children
-    node.children = []
+    if (node._baseChildren) node.children = node._baseChildren
     node.expanded = false
     applyLayout()
-    updateStats()
     recenterAfterLayout()
     return
   }
 
   // 有缓存 -> 直接复原
-  if (node._cachedChildren) {
-    node.children = node._cachedChildren
-    node._cachedChildren = null
+  if (node._extraChildren) {
+    node.children = [...(node._baseChildren || []), ...node._extraChildren]
     node.expanded = true
     applyLayout()
-    updateStats()
     recenterAfterLayout()
     return
   }
 
-  // 首次展开 -> 拉取
+  // 首次展开 -> 拉取追加内容(目录图是子目录/文件, 标签图是标签下的文件)
   expandingId.value = nodeId
   try {
-    const children = node.loadChildren ? await node.loadChildren() : []
-    node.children = children
+    const extra = node.loadChildren ? await node.loadChildren() : []
+    node._baseChildren = [...(node.children || [])]
+    node._extraChildren = extra
+    node.children = [...node._baseChildren, ...extra]
     node.expanded = true
-    // 加载后仍为空 -> 标记为叶子, 去掉角标
-    if (!children.length) {
+    // 追加内容为空且本来没有层级 -> 视为叶子, 去掉角标
+    if (!node.children.length) {
       node.expandable = false
     }
     applyLayout()
-    updateStats()
     recenterAfterLayout()
   } catch (e) {
     ElMessage.error('展开失败: ' + (e.message || '未知错误'))
@@ -439,19 +436,7 @@ function findRawNode(node, id) {
   return null
 }
 
-/** 统计已加载的节点数, 覆盖 loader 给的初始文案 */
-function updateStats() {
-  if (!currentRoot) return
-  let dirs = 0
-  let files = 0
-  const walk = (n) => {
-    if (n.type === 'branch') dirs++
-    if (n.type === 'leaf') files++
-    ;(n.children || []).forEach(walk)
-  }
-  walk(currentRoot)
-  statsText.value = `${dirs} 个文件夹 · ${files} 个文件 · 点击节点展开/收起`
-}
+
 
 /* ---------------- 缩放 ---------------- */
 function zoomBy(factor) {
@@ -602,7 +587,8 @@ defineExpose({ open })
   stroke: var(--border-color);
 }
 
-.node-leaf {
+.node-leaf,
+.node-tag {
   stroke-width: 1.4;
 }
 

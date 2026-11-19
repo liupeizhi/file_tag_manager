@@ -225,7 +225,18 @@ public class FileTagService {
     }
     
     public List<FileDTO> getFilesByTagWithDetails(Long tagId, Long serverId) {
-        List<Long> tagIds = getAllTagIdsIncludingChildren(tagId);
+        return getFilesByTagWithDetails(tagId, serverId, true);
+    }
+
+    /**
+     * @param includeChildren true 时一并返回所有下级标签上的文件(标签筛选列表用);
+     *                        false 时只返回直接打在该标签上的文件(关系图展开用,
+     *                        否则父标签展开的内容会和子标签重复)
+     */
+    public List<FileDTO> getFilesByTagWithDetails(Long tagId, Long serverId, boolean includeChildren) {
+        List<Long> tagIds = includeChildren
+                ? getAllTagIdsIncludingChildren(tagId)
+                : java.util.Collections.singletonList(tagId);
         List<FileDTO> result = new ArrayList<>();
         
         for (Long tid : tagIds) {

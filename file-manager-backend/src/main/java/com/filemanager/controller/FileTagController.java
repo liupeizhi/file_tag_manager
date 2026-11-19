@@ -100,7 +100,9 @@ public class FileTagController {
     @GetMapping("/{tagId}/files/detail")
     public ApiResponse<List<FileDTO>> getFilesByTagWithDetails(
             @PathVariable Long tagId,
-            @RequestParam(required = false) Long serverId) {
-        return ApiResponse.success(tagService.getFilesByTagWithDetails(tagId, serverId));
+            @RequestParam(required = false) Long serverId,
+            @RequestParam(required = false, defaultValue = "true") boolean includeChildren) {
+        return ApiResponse.success(
+                tagService.getFilesByTagWithDetails(tagId, serverId, includeChildren));
     }
 }

@@ -39,15 +39,26 @@ export async function loadTagGraph(opts = {}) {
   const { tagId } = opts
 
   let tagCount = 0
+
+  /**
+   * 标签节点: 子标签直接作为层级展示, 点击节点再按需加载
+   * "该标签下的文件"(展开/收起)。文件是真正的叶子, 不可再展开。
+   */
   const mapTag = (tag) => {
     tagCount++
     return {
       id: `tag-${tag.id}`,
       label: tag.name,
-      type: 'leaf',
+      type: 'tag',
       color: tag.color || '#909399',
       title: tag.name,
-      children: (tag.children || []).map(mapTag)
+      children: (tag.children || []).map(mapTag),
+      expandable: true,
+      expanded: false,
+      loadChildren: async () => {
+        const files = (await getFilesByTagWithDetails(tag.id, opts.serverId, false)) || []
+        return files.map(makeFileNode)
+      }
     }
   }
 
@@ -66,7 +77,13 @@ export async function loadTagGraph(opts = {}) {
       type: 'root',
       color: target.color || '#909399',
       title: target.name,
-      children: (target.children || []).map(mapTag)
+      children: (target.children || []).map(mapTag),
+      expandable: true,
+      expanded: false,
+      loadChildren: async () => {
+        const files = (await getFilesByTagWithDetails(target.id, opts.serverId, false)) || []
+        return files.map(makeFileNode)
+      }
     }
     return {
       root,
