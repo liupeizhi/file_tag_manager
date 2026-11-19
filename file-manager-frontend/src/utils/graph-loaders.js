@@ -208,11 +208,12 @@ export async function loadDirectoryGraph(opts = {}) {
 
 /* ---------------- 文件关系图 ---------------- */
 /**
- * 文件关系图: 以文件为根节点, 向下挂两棵"所属"子树 ——
+ * 文件关系图: 以文件为根节点, 向下挂两棵"所属"子树。
+ * 层级一律「由近及远」—— 离文件最近的一层先出现, 越往外越远:
  *
  *   文件
- *   ├── 所在目录: 服务器根 → 各级目录 → 文件所在目录
- *   └── 所属标签: 标签组 → 各级上级标签 → 文件直接打上的标签
+ *   ├── 所在目录: 文件所在目录 → 上一级 → … → 服务器根
+ *   └── 所属标签: 文件直接标签 → 上级标签 → … → 标签分组
  *
  * 只看层级, 不在图里展开兄弟文件, 避免和上下级重复。
  *
@@ -243,32 +244,38 @@ export async function loadFileGraph(opts = {}) {
     children: []
   }
 
-  /* --- 目录层级: 自上而下从服务器根排到文件所在目录 --- */
+  /* --- 目录层级: 文件所在目录 → 逐级向上 → 服务器根 --- */
   const segments = String(filePath).split('/').filter(Boolean)
   const dirSegments = segments.slice(0, -1) // 最后一段是文件名
 
-  const dirRoot = {
+  // 链从"最近的一层"开始: 文件所在目录 → 上一级 → …
+  const dirChain = []
+  for (let i = dirSegments.length; i >= 1; i--) {
+    const path = '/' + dirSegments.slice(0, i).join('/')
+    dirChain.push({
+      id: `dir-${path}`,
+      label: dirSegments[i - 1],
+      type: 'branch',
+      color: '#909399',
+      title: path,
+      children: []
+    })
+  }
+  // 服务器根是整条链的最远端
+  dirChain.push({
     id: 'dir-server',
     label: serverName || '/',
     type: 'branch',
     color: '#909399',
     title: serverName ? `${serverName} · 根目录` : '服务器根目录',
     children: []
-  }
-  let cursor = dirRoot
-  let acc = ''
-  for (const seg of dirSegments) {
-    acc += `/${seg}`
-    const child = {
-      id: `dir-${acc}`,
-      label: seg,
-      type: 'branch',
-      color: '#909399',
-      title: acc,
-      children: []
-    }
-    cursor.children.push(child)
-    cursor = child
+  })
+
+  // 数组是"近 → 远", 逐层串起来: 近的当父节点, 远的当它的子节点
+  let dirTail = null
+  for (let i = dirChain.length - 1; i >= 0; i--) {
+    dirChain[i].children = dirTail ? [dirTail] : []
+    dirTail = dirChain[i]
   }
 
   root.children.push({
@@ -276,59 +283,70 @@ export async function loadFileGraph(opts = {}) {
     label: '所在目录',
     type: 'branch',
     color: '#909399',
-    title: `${dirSegments.length + 1} 层目录`,
-    children: [dirRoot]
+    title: `${dirChain.length} 层目录 · 由近及远`,
+    children: [dirTail]
   })
 
-  /* --- 标签层级: 从分组树里只留下与该文件相关的分支 --- */
-  // 先记下每个标签的祖先链, 用来判断哪些分支要保留
-  const ancestorOf = new Map()
+  /* --- 标签层级: 文件直接标签 → 逐级向上 → 标签分组 --- */
+  // 先建好父子索引, 才能从标签一路走到分组
+  const parentOf = new Map()
+  const groupOf = new Map()
   for (const group of groups || []) {
-    const walk = (nodes, chain) => {
+    const walk = (nodes, parent) => {
       for (const tag of nodes || []) {
-        const next = [...chain, tag.id]
-        ancestorOf.set(tag.id, next)
-        walk(tag.children, next)
+        if (parent) parentOf.set(tag.id, parent)
+        groupOf.set(tag.id, group)
+        walk(tag.children, tag)
       }
     }
-    walk(group.tags, [])
+    walk(group.tags, null)
   }
 
-  const keepTagIds = new Set()
-  for (const tag of tags) {
-    const chain = ancestorOf.get(tag.id) || [tag.id]
-    chain.forEach((id) => keepTagIds.add(id))
-  }
-
-  const mapTag = (tag) => {
-    if (!keepTagIds.has(tag.id)) return null
-    const children = (tag.children || []).map(mapTag).filter(Boolean)
-    return {
-      id: `tag-${tag.id}`,
-      label: tag.name,
-      type: 'tag',
-      color: tag.color || '#909399',
-      title: tag.name,
-      children
+  /**
+   * 单个标签的链路: [自己, 父, 祖父, …, 分组]。
+   * 同一个上级可能出现在多条链路里(文件打了兄弟标签时),
+   * 因为一棵树表达不了"一个节点多个父", 宁可重复展示也不合并。
+   * 节点 id 带上序号, 避免多条链路里的同名祖先撞 key。
+   */
+  const buildTagChain = (tag, seq) => {
+    const chain = []
+    const seen = new Set()
+    let cur = tag
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id)
+      chain.push({
+        id: `tag-${cur.id}-${seq}`,
+        label: cur.name,
+        type: 'tag',
+        color: cur.color || '#909399',
+        title: cur.name,
+        children: []
+      })
+      cur = parentOf.get(cur.id)
     }
+    const group = groupOf.get(tag.id)
+    if (group) {
+      chain.push({
+        id: `group-${group.id}-${seq}`,
+        label: group.name,
+        type: 'branch',
+        color: '#909399',
+        title: `${group.name} · 标签分组`,
+        children: []
+      })
+    }
+
+    let tail = null
+    for (let i = chain.length - 1; i >= 0; i--) {
+      chain[i].children = tail ? [tail] : []
+      tail = chain[i]
+    }
+    return tail
   }
 
-  const tagBranches = []
-  for (const group of groups || []) {
-    const children = (group.tags || []).map(mapTag).filter(Boolean)
-    if (!children.length) continue
-    tagBranches.push({
-      id: `group-${group.id}`,
-      label: group.name,
-      type: 'branch',
-      color: '#909399',
-      title: `${group.name}（${children.length} 个分支）`,
-      children
-    })
-  }
-
-  if (!tagBranches.length) {
-    tagBranches.push({
+  const tagChains = tags.map((tag, i) => buildTagChain(tag, i)).filter(Boolean)
+  if (!tagChains.length) {
+    tagChains.push({
       id: 'no-tags',
       label: '（未打标签）',
       type: 'leaf',
@@ -343,13 +361,13 @@ export async function loadFileGraph(opts = {}) {
     label: '所属标签',
     type: 'branch',
     color: '#909399',
-    title: `${tags.length} 个标签`,
-    children: tagBranches
+    title: `${tags.length} 个标签 · 由近及远`,
+    children: tagChains
   })
 
   return {
     root,
-    hint: '文件 → 所在目录层级 / 所属标签层级',
-    statsText: `${dirSegments.length + 1} 层目录 · ${tags.length} 个标签`
+    hint: '文件 → 由近及远：所在目录 / 所属标签',
+    statsText: `${dirChain.length} 层目录 · ${tags.length} 个标签`
   }
 }
