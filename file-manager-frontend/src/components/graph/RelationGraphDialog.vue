@@ -14,6 +14,15 @@
         <span v-if="statsText" class="graph-stats">（{{ statsText }}）</span>
       </div>
       <div class="graph-actions">
+        <label class="graph-switch" title="关闭后, 节点拖到哪儿就停在哪儿">
+          <span class="switch-label">拖动回弹</span>
+          <el-switch
+            v-model="springBack"
+            size="small"
+            :disabled="!hasData"
+            @change="handleSpringBackChange"
+          />
+        </label>
         <el-radio-group v-model="layoutMode" size="small" @change="handleLayoutChange">
           <el-radio-button v-for="l in LAYOUTS" :key="l.value" :value="l.value">
             {{ l.label }}
@@ -122,7 +131,9 @@
         >
           <i class="dot" :class="item.dotClass"></i>{{ item.label }}
         </span>
-        <span class="legend-tip">拖动节点会弹回原位 · 空白处拖拽平移 · 滚轮缩放</span>
+        <span class="legend-tip">
+          {{ springBack ? '拖动节点会弹回原位' : '拖动节点停在原地' }} · 空白处拖拽平移 · 滚轮缩放
+        </span>
       </div>
     </template>
   </el-dialog>
@@ -133,6 +144,7 @@ import { ref, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
 import { computeLayout, buildLinkPath, LAYOUTS } from '@/utils/tag-graph-layout'
+import { springBack } from '@/utils/graph-prefs'
 
 const props = defineProps({
   title: { type: String, default: '关系图' },
@@ -166,6 +178,14 @@ const view = ref({ x: 0, y: 0 })
 /** 节点拖动偏移: id -> { dx, dy, springing } */
 const dragOffsets = ref({})
 const draggingId = ref(null)
+
+/** 关掉回弹时如果正好在回弹, 就地停住, 别继续把节点拉回去 */
+function handleSpringBackChange(val) {
+  if (!val && springRaf) {
+    cancelAnimationFrame(springRaf)
+    springRaf = null
+  }
+}
 
 /**
  * 连线按节点"当前"位置(布局位置 + 拖动偏移)实时计算,
@@ -347,10 +367,11 @@ function endPointer() {
       // 几乎没动 -> 视为点击: 清掉偏移并尝试展开
       setOffset(id, 0, 0)
       handleNodeActivate(id)
-    } else {
+    } else if (springBack.value) {
       // 松手后弹簧回弹: 节点与连线一起回到布局位置
       startSpring(id, cur.dx, cur.dy)
     }
+    // 关闭回弹时不做事: 保留当前偏移, 节点停在松手的位置
   }
   isPanning.value = false
   panStart = null
@@ -519,6 +540,19 @@ defineExpose({ open })
 
 .graph-stats {
   color: var(--text-secondary);
+}
+
+.graph-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.graph-switch .switch-label {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .graph-actions {
