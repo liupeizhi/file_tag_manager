@@ -104,28 +104,14 @@
                 {{ node.label }}
               </text>
               <!--
-                右侧角标有两种含义:
-                  可展开(目录节点): 加号/减号, 点击展开或收起
-                  可新增(标签节点): 加号, 点击弹出"新增子标签"
+                右侧角标, 从右到左依次是:
+                  删除(-) / 新增(+) / 展开文件(纸条图标) / 目录展开(+)。
+                位置由 badgeX() 按当前节点实际有几个角标算出来。
               -->
-              <g
-                v-if="node.addable || node.expandable"
-                class="node-expander"
-                :class="{ expanded: node.expanded, adder: node.addable }"
-                :transform="`translate(${node.width / 2 - (node.removable ? 25 : 9)}, ${node.height / 2})`"
-                @mousedown.stop
-                @click.stop="handleBadgeClick(node)"
-              >
-                <circle r="7" />
-                <path v-if="node.addable || !node.expanded" d="M -3.2 0 H 3.2 M 0 -3.2 V 3.2" />
-                <path v-else d="M -3.2 0 H 3.2" />
-                <title v-if="node.addable">新增子标签</title>
-              </g>
-              <!-- 叶子节点: 右侧再挂一个减号用于删除 -->
               <g
                 v-if="node.removable"
                 class="node-remover"
-                :transform="`translate(${node.width / 2 - 9}, ${node.height / 2})`"
+                :transform="`translate(${badgeX(node, 'remove')}, ${node.height / 2})`"
                 @mousedown.stop
                 @click.stop="emit('remove-node', node)"
               >
@@ -133,6 +119,49 @@
                 <path d="M -3.2 0 H 3.2" />
                 <title>删除标签</title>
               </g>
+
+              <g
+                v-if="node.addable"
+                class="node-expander adder"
+                :transform="`translate(${badgeX(node, 'add')}, ${node.height / 2})`"
+                @mousedown.stop
+                @click.stop="emit('add-child', node)"
+              >
+                <circle r="7" />
+                <path d="M -3.2 0 H 3.2 M 0 -3.2 V 3.2" />
+                <title>新增子标签</title>
+              </g>
+
+              <!-- 标签节点: 展开/收起该标签下的所有文件 -->
+              <g
+                v-if="node.fileExpandable"
+                class="node-files"
+                :class="{ expanded: node.expanded }"
+                :transform="`translate(${badgeX(node, 'files')}, ${node.height / 2})`"
+                @mousedown.stop
+                @click.stop="toggleFiles(node)"
+              >
+                <circle r="7" />
+                <rect x="-3" y="-4" width="6" height="8" rx="1" />
+                <path d="M -1.6 -1.4 H 1.6 M -1.6 1.2 H 1.6" />
+                <title>{{ node.expanded ? '收起该标签下的文件' : '展开该标签下的文件' }}</title>
+              </g>
+
+              <!-- 目录节点: 展开/收起下级 -->
+              <g
+                v-if="node.expandable"
+                class="node-expander"
+                :class="{ expanded: node.expanded }"
+                :transform="`translate(${badgeX(node, 'expand')}, ${node.height / 2})`"
+                @mousedown.stop
+                @click.stop="handleBadgeClick(node)"
+              >
+                <circle r="7" />
+                <path v-if="!node.expanded" d="M -3.2 0 H 3.2 M 0 -3.2 V 3.2" />
+                <path v-else d="M -3.2 0 H 3.2" />
+                <title>{{ node.expanded ? '收起' : '展开' }}</title>
+              </g>
+
               <title>{{ node.title }}</title>
             </g>
           </g>
@@ -398,6 +427,33 @@ function endPointer() {
   panStart = null
 }
 
+/**
+ * 角标排布: 从右边缘往左依次是 删除 → 新增 → 展开文件;
+ * 目录节点只有一个展开角标。返回顺序即从左到右的绘制顺序。
+ */
+function badgeOrder(node) {
+  if (node.addable || node.fileExpandable) {
+    const list = []
+    if (node.fileExpandable) list.push('files')
+    if (node.addable) list.push('add')
+    if (node.removable) list.push('remove')
+    return list
+  }
+  return node.expandable ? ['expand'] : []
+}
+
+/** 角标圆心相对节点中心的 x 偏移 */
+function badgeX(node, kind) {
+  const order = badgeOrder(node)
+  const fromRight = order.length - 1 - order.indexOf(kind)
+  return node.width / 2 - 9 - Math.max(0, fromRight) * 16
+}
+
+/** 展开/收起标签下的文件(走懒加载, 与目录展开同一套缓存) */
+function toggleFiles(node) {
+  handleNodeActivate(node.id, true)
+}
+
 /** 角标点击: 新增型抛事件给调用方(由它弹窗填名字), 展开型走展开逻辑 */
 function handleBadgeClick(node) {
   if (node.addable) {
@@ -436,7 +492,7 @@ function recenterAfterLayout() {
  * 点击节点: 未展开则展开, 已展开则收起。
  * 收起时不丢弃已加载的子节点, 缓存起来下次直接复原, 避免重复请求。
  */
-async function handleNodeActivate(nodeId) {
+async function handleNodeActivate(nodeId, force = false) {
   const node = findRawNode(currentRoot, nodeId)
   if (!node) return
 
@@ -446,7 +502,9 @@ async function handleNodeActivate(nodeId) {
     return
   }
 
-  if (!node.expandable || expandingId.value) return
+  // 标签节点默认只有"展开文件"角标能展开, 点节点本体不展开
+  const canExpand = node.expandable || (force && node.fileExpandable)
+  if (!canExpand || expandingId.value) return
 
   // 已展开 -> 收起(只移除追加出来的子节点, 保留原有层级)
   if (node.expanded) {
@@ -470,6 +528,10 @@ async function handleNodeActivate(nodeId) {
   expandingId.value = nodeId
   try {
     const extra = node.loadChildren ? await node.loadChildren() : []
+    // 标签下没有文件时给个反馈, 否则点了没反应会让人以为坏了
+    if (!extra.length && node.fileExpandable) {
+      ElMessage.info('该标签下没有文件')
+    }
     node._baseChildren = [...(node.children || [])]
     node._extraChildren = extra
     node.children = [...node._baseChildren, ...extra]
@@ -732,6 +794,44 @@ defineExpose({ open, reload })
 }
 
 .node-remover:hover path {
+  stroke: var(--bg-card);
+}
+
+/* 展开文件角标: 纸条图标, 展开后反色 */
+.node-files {
+  cursor: pointer;
+}
+
+.node-files circle {
+  fill: var(--bg-card);
+  stroke: var(--text-secondary);
+  stroke-width: 1;
+  transition: fill 0.12s;
+}
+
+.node-files rect,
+.node-files path {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+}
+
+.node-files:hover circle {
+  fill: var(--text-secondary);
+}
+
+.node-files:hover rect,
+.node-files:hover path {
+  stroke: var(--bg-card);
+}
+
+.node-files.expanded circle {
+  fill: var(--text-secondary);
+}
+
+.node-files.expanded rect,
+.node-files.expanded path {
   stroke: var(--bg-card);
 }
 

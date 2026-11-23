@@ -66,13 +66,21 @@ function fitLabel(text, maxWidth) {
 }
 
 /**
- * 节点右侧要画几个角标, 以及它们占掉多少横向空间。
- * 标签节点: + 必有, 叶子再加一个 -; 目录节点: 只有一个展开角标。
+ * 节点右侧要画几个角标。
+ * 标签节点: 新增(+)、展开文件、叶子再加一个删除(-);
+ * 目录节点: 只有一个展开角标。
+ * 与组件里的 badgeOrder() 保持一致。
  */
+export function badgeCount(node) {
+  if (node.addable || node.fileExpandable) {
+    return (node.addable ? 1 : 0) + (node.fileExpandable ? 1 : 0) + (node.removable ? 1 : 0)
+  }
+  return node.expandable ? 1 : 0
+}
+
+/** 角标占掉的横向空间 */
 export function badgeArea(node) {
-  if (node.removable) return BADGE_SIZE * 2
-  if (node.addable || node.expandable) return BADGE_SIZE
-  return 0
+  return badgeCount(node) * BADGE_SIZE
 }
 
 export function nodeWidth(node) {
@@ -120,7 +128,9 @@ function emptyNode(node, x, y) {
     add: node.add || null,
     // 删除标记(只有叶子节点有): 供组件画 "-" 并抛出 remove-node
     removable: node.removable === true,
-    remove: node.remove || null
+    remove: node.remove || null,
+    // 展开文件标记: 供组件画"纸条"角标, 懒加载出该标签下的文件
+    fileExpandable: node.fileExpandable === true
   }
 }
 

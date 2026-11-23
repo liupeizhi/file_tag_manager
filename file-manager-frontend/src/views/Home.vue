@@ -52,7 +52,7 @@
     <FilePreview 
       v-model="showPreview" 
       :file="previewFile"
-      :server-id="serverStore.currentServer?.id"
+      :server-id="previewServerId ?? serverStore.currentServer?.id"
       :directory-files="previewFiles || fileStore.fileList"
       @file-change="handleFileChange"
     />
@@ -66,6 +66,7 @@
       :loader="loadTagGraph"
       @add-child="handleAddChildTag"
       @remove-node="handleRemoveTagNode"
+      @preview-file="handleGraphPreview"
     />
 
     <RelationGraphDialog
@@ -119,6 +120,8 @@ const showPreview = ref(false)
 const previewFile = ref(null)
 /** 从关系图打开预览时, 用图里的同目录文件做上下切换; 普通列表预览为 null */
 const previewFiles = ref(null)
+/** 关系图里的文件可能来自别的服务器, 预览时用它覆盖当前服务器 */
+const previewServerId = ref(null)
 const tagTreeRef = ref(null)
 const fileListRef = ref(null)
 
@@ -141,7 +144,7 @@ const fileLegend = [
 
 /** 顶栏: 标签关系图 */
 function openTagGraph() {
-  tagGraphRef.value?.open()
+  tagGraphRef.value?.open({ serverId: serverStore.currentServer?.id })
 }
 
 /** 顶栏: 当前服务器的目录关系图(从根目录开始) */
@@ -222,7 +225,7 @@ async function handleRemoveTagNode(node) {
 /** 文件列表: 当前标签的关系图(只看该标签及其下级) */
 function openCurrentTagGraph(tag) {
   if (!tag) return
-  tagGraphRef.value?.open({ tagId: tag.id })
+  tagGraphRef.value?.open({ tagId: tag.id, serverId: serverStore.currentServer?.id })
 }
 
 /** 文件列表: 以该文件为根, 看它所在的目录层级和标签层级 */
@@ -291,6 +294,7 @@ async function handleTagClick(tag) {
 
 function handlePreview(file) {
   previewFiles.value = null
+  previewServerId.value = null
   previewFile.value = file
   showPreview.value = true
 }
@@ -299,6 +303,7 @@ function handlePreview(file) {
 function handleGraphPreview({ file, siblings } = {}) {
   if (!file) return
   previewFiles.value = Array.isArray(siblings) && siblings.length ? siblings : null
+  previewServerId.value = file.serverId ?? null
   previewFile.value = file
   showPreview.value = true
 }

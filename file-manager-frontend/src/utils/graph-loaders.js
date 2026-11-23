@@ -9,7 +9,7 @@
  * 目录图采用懒加载: 初始只取一层, 节点上的 loadChildren 在展开时才拉取下一层。
  */
 
-import { getTagGroups, getFileTags } from '@/api/tag'
+import { getTagGroups, getFilesByTagWithDetails, getFileTags } from '@/api/tag'
 import { getDirectoryTree } from '@/api/file'
 import { getFileTypeInfo } from '@/utils/file-type'
 
@@ -58,6 +58,12 @@ export async function loadTagGraph(opts = {}) {
       : null
   })
 
+  /** 该标签下的文件(含下级标签), 供"展开文件"角标懒加载 */
+  const loadTagFiles = (tag) => async () => {
+    const files = (await getFilesByTagWithDetails(tag.id, opts.serverId, true)) || []
+    return files.map((file) => makeFileNode(file, file.serverId ?? opts.serverId))
+  }
+
   const mapTag = (tag, group) => {
     tagCount++
     const children = (tag.children || []).map((child) => mapTag(child, group))
@@ -70,7 +76,11 @@ export async function loadTagGraph(opts = {}) {
       children,
       ...addMeta(tag, group),
       // 只允许删叶子节点, 有下级标签的节点不给删
-      ...removeMeta(tag, group, children.length === 0)
+      ...removeMeta(tag, group, children.length === 0),
+      // 点纸条角标展开该标签下的所有文件
+      fileExpandable: true,
+      expanded: false,
+      loadChildren: loadTagFiles(tag)
     }
   }
 
@@ -90,7 +100,10 @@ export async function loadTagGraph(opts = {}) {
       title: target.name,
       children,
       ...addMeta(target, group),
-      ...removeMeta(target, group, children.length === 0)
+      ...removeMeta(target, group, children.length === 0),
+      fileExpandable: true,
+      expanded: false,
+      loadChildren: loadTagFiles(target)
     }
     return {
       root,
