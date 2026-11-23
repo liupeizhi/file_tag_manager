@@ -165,7 +165,7 @@ import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
 import { computeLayout, buildLinkPath, LAYOUTS } from '@/utils/tag-graph-layout'
 import { springBack } from '@/utils/graph-prefs'
 
-const emit = defineEmits(['add-child', 'remove-node'])
+const emit = defineEmits(['add-child', 'remove-node', 'preview-file'])
 
 const props = defineProps({
   title: { type: String, default: '关系图' },
@@ -438,7 +438,15 @@ function recenterAfterLayout() {
  */
 async function handleNodeActivate(nodeId) {
   const node = findRawNode(currentRoot, nodeId)
-  if (!node || !node.expandable || expandingId.value) return
+  if (!node) return
+
+  // 文件节点(目录图里的叶子): 单击直接打开预览
+  if (node.file) {
+    emit('preview-file', { file: node.file, siblings: siblingFilesOf(node) })
+    return
+  }
+
+  if (!node.expandable || expandingId.value) return
 
   // 已展开 -> 收起(只移除追加出来的子节点, 保留原有层级)
   if (node.expanded) {
@@ -477,6 +485,23 @@ async function handleNodeActivate(nodeId) {
   } finally {
     expandingId.value = null
   }
+}
+
+/** 同一个父节点下的其它文件, 用于预览里的上一张/下一张 */
+function siblingFilesOf(node) {
+  const parent = findParentOf(currentRoot, node.id)
+  const list = parent ? parent.children : currentRoot ? [currentRoot] : []
+  return (list || []).filter((c) => c.file).map((c) => c.file)
+}
+
+function findParentOf(node, id) {
+  if (!node) return null
+  for (const child of node.children || []) {
+    if (child.id === id) return node
+    const found = findParentOf(child, id)
+    if (found) return found
+  }
+  return null
 }
 
 function findRawNode(node, id) {

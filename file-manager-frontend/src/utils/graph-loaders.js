@@ -144,7 +144,7 @@ function makeDirectoryNode(serverId, dir) {
   }
 }
 
-function makeFileNode(file) {
+function makeFileNode(file, serverId) {
   const info = getFileTypeInfo(file.name)
   return {
     id: `file-${file.path}`,
@@ -152,14 +152,24 @@ function makeFileNode(file) {
     type: 'leaf',
     color: info.color || '#909399',
     title: file.path,
-    children: []
+    children: [],
+    // 带上文件本身的元信息: 点节点时用它打开预览
+    file: {
+      serverId: file.serverId ?? serverId,
+      path: file.path,
+      name: file.name,
+      size: file.size,
+      contentType: file.contentType,
+      lastModified: file.lastModified,
+      isDirectory: false
+    }
   }
 }
 
 function makeEntryNode(serverId, entry) {
   return entry.isDirectory
     ? makeDirectoryNode(serverId, entry)
-    : makeFileNode(entry)
+    : makeFileNode(entry, serverId)
 }
 
 function nameOfPath(path) {

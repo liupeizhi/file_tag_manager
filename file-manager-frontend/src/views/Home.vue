@@ -53,7 +53,7 @@
       v-model="showPreview" 
       :file="previewFile"
       :server-id="serverStore.currentServer?.id"
-      :directory-files="fileStore.fileList"
+      :directory-files="previewFiles || fileStore.fileList"
       @file-change="handleFileChange"
     />
 
@@ -75,6 +75,7 @@
       root-label="服务器"
       :legend-items="dirLegend"
       :loader="loadDirectoryGraph"
+      @preview-file="handleGraphPreview"
     />
 
     <RelationGraphDialog
@@ -116,6 +117,8 @@ const favoriteStore = useFavoriteStore()
 const sidebarTab = ref('directory')
 const showPreview = ref(false)
 const previewFile = ref(null)
+/** 从关系图打开预览时, 用图里的同目录文件做上下切换; 普通列表预览为 null */
+const previewFiles = ref(null)
 const tagTreeRef = ref(null)
 const fileListRef = ref(null)
 
@@ -287,6 +290,15 @@ async function handleTagClick(tag) {
 }
 
 function handlePreview(file) {
+  previewFiles.value = null
+  previewFile.value = file
+  showPreview.value = true
+}
+
+/** 目录关系图里点文件: 直接用图里的节点数据打开预览 */
+function handleGraphPreview({ file, siblings } = {}) {
+  if (!file) return
+  previewFiles.value = Array.isArray(siblings) && siblings.length ? siblings : null
   previewFile.value = file
   showPreview.value = true
 }
