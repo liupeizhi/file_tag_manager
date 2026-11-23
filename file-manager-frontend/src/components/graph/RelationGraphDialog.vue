@@ -103,16 +103,23 @@
               >
                 {{ node.label }}
               </text>
-              <!-- 懒加载节点: 未展开时右侧画一个加号 -->
+              <!--
+                右侧角标有两种含义:
+                  可展开(目录节点): 加号/减号, 点击展开或收起
+                  可新增(标签节点): 加号, 点击弹出"新增子标签"
+              -->
               <g
-                v-if="node.expandable"
+                v-if="node.addable || node.expandable"
                 class="node-expander"
-                :class="{ expanded: node.expanded }"
+                :class="{ expanded: node.expanded, adder: node.addable }"
                 :transform="`translate(${node.width / 2 - 9}, ${node.height / 2})`"
+                @mousedown.stop
+                @click.stop="handleBadgeClick(node)"
               >
                 <circle r="7" />
-                <path v-if="!node.expanded" d="M -3.2 0 H 3.2 M 0 -3.2 V 3.2" />
+                <path v-if="node.addable || !node.expanded" d="M -3.2 0 H 3.2 M 0 -3.2 V 3.2" />
                 <path v-else d="M -3.2 0 H 3.2" />
+                <title v-if="node.addable">新增子标签</title>
               </g>
               <title>{{ node.title }}</title>
             </g>
@@ -145,6 +152,8 @@ import { ElMessage } from 'element-plus'
 import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
 import { computeLayout, buildLinkPath, LAYOUTS } from '@/utils/tag-graph-layout'
 import { springBack } from '@/utils/graph-prefs'
+
+const emit = defineEmits(['add-child'])
 
 const props = defineProps({
   title: { type: String, default: '关系图' },
@@ -377,6 +386,15 @@ function endPointer() {
   panStart = null
 }
 
+/** 角标点击: 新增型抛事件给调用方(由它弹窗填名字), 展开型走展开逻辑 */
+function handleBadgeClick(node) {
+  if (node.addable) {
+    emit('add-child', node)
+    return
+  }
+  handleNodeActivate(node.id)
+}
+
 /* ---------------- 懒加载展开 ---------------- */
 const expandingId = ref(null)
 
@@ -516,7 +534,15 @@ function open(options = {}) {
   visible.value = true
 }
 
-defineExpose({ open })
+/** 重新加载数据(新增子节点后刷新用); 顺带重新适配视图 */
+async function reload() {
+  if (!visible.value) return
+  await loadData()
+  await nextTick()
+  fitToView()
+}
+
+defineExpose({ open, reload })
 </script>
 
 <style scoped>

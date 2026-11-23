@@ -64,6 +64,7 @@
       root-label="原点"
       :legend-items="tagLegend"
       :loader="loadTagGraph"
+      @add-child="handleAddChildTag"
     />
 
     <RelationGraphDialog
@@ -90,7 +91,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import FileTree from '@/components/file/FileTree.vue'
 import FileList from '@/components/file/FileList.vue'
@@ -100,7 +101,7 @@ import FavoriteList from '@/components/favorite/FavoriteList.vue'
 import FilePreview from '@/components/preview/FilePreview.vue'
 import RelationGraphDialog from '@/components/graph/RelationGraphDialog.vue'
 import { loadTagGraph, loadDirectoryGraph, loadFileGraph } from '@/utils/graph-loaders'
-import { getFilesByTagWithDetails } from '@/api/tag'
+import { getFilesByTagWithDetails, createTag } from '@/api/tag'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
 import { useHistoryStore } from '@/store/history'
@@ -147,6 +148,46 @@ function openServerDirGraph() {
     serverName: server ? server.name : '',
     basePath: '/'
   })
+}
+
+/** 标签关系图: 点节点上的 "+" 新增子标签 */
+async function handleAddChildTag(node) {
+  const meta = node?.add
+  if (!meta || meta.tagId == null) return
+
+  let name
+  try {
+    const res = await ElMessageBox.prompt('请输入新标签的名称', `在「${meta.parentName}」下新增子标签`, {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputPlaceholder: '标签名称',
+      inputValidator: (v) => {
+        const val = String(v ?? '').trim()
+        if (!val) return '名称不能为空'
+        if (val.length > 50) return '名称不能超过 50 个字符'
+        return true
+      }
+    })
+    name = String(res.value).trim()
+  } catch (e) {
+    // 取消/关闭弹窗不算错误
+    return
+  }
+
+  try {
+    await createTag({
+      name,
+      // 沿用父标签的颜色, 新节点打开后就能看出归属
+      color: node.color || '#409EFF',
+      parentId: meta.tagId,
+      groupId: meta.groupId
+    })
+    ElMessage.success('已新增子标签')
+    tagTreeRef.value?.loadGroups?.()
+    tagGraphRef.value?.reload()
+  } catch (e) {
+    ElMessage.error('新增失败：' + (e?.message || '未知错误'))
+  }
 }
 
 /** 文件列表: 当前标签的关系图(只看该标签及其下级) */

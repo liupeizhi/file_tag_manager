@@ -9,7 +9,7 @@
  * 目录图采用懒加载: 初始只取一层, 节点上的 loadChildren 在展开时才拉取下一层。
  */
 
-import { getTagGroups, getFilesByTagWithDetails, getFileTags } from '@/api/tag'
+import { getTagGroups, getFileTags } from '@/api/tag'
 import { getDirectoryTree } from '@/api/file'
 import { getFileTypeInfo } from '@/utils/file-type'
 
@@ -30,6 +30,10 @@ function findTag(tags, id) {
 /**
  * 标签关系图。
  *
+ * 只画标签层级, 不展示文件 —— 展开文件这件事交给文件视图去做。
+ * 标签节点右侧的 "+" 用来新增子标签: 组件抛出 add-child,
+ * 由调用方弹窗填写名称后调用创建接口, 再 reload 这张图。
+ *
  * @param {object} opts
  *   tagId  可选; 传了就只画该标签及其下级(从标签面板点开时用),
  *          不传则画全部: 原点 → 标签组 → 标签层级
@@ -40,11 +44,13 @@ export async function loadTagGraph(opts = {}) {
 
   let tagCount = 0
 
-  /**
-   * 标签节点: 子标签直接作为层级展示, 点击节点再按需加载
-   * "该标签下的文件"(展开/收起)。文件是真正的叶子, 不可再展开。
-   */
-  const mapTag = (tag) => {
+  /** 新增子标签需要的上下文, 一并挂在节点上 */
+  const addMeta = (tag, group) => ({
+    addable: true,
+    add: { tagId: tag.id, groupId: group ? group.id : null, parentName: tag.name }
+  })
+
+  const mapTag = (tag, group) => {
     tagCount++
     return {
       id: `tag-${tag.id}`,
@@ -52,22 +58,15 @@ export async function loadTagGraph(opts = {}) {
       type: 'tag',
       color: tag.color || '#909399',
       title: tag.name,
-      children: (tag.children || []).map(mapTag),
-      expandable: true,
-      expanded: false,
-      loadChildren: async () => {
-        const files = (await getFilesByTagWithDetails(tag.id, opts.serverId, false)) || []
-        return files.map(makeFileNode)
-      }
+      children: (tag.children || []).map((child) => mapTag(child, group)),
+      ...addMeta(tag, group)
     }
   }
 
-  // 指定标签 -> 以该标签为根
+  // 指定标签 -> 以该标签为根(它自己也算可继续新增子标签)
   if (tagId != null) {
-    const target = findTag(
-      groups.flatMap((g) => g.tags || []),
-      tagId
-    )
+    const group = (groups || []).find((g) => findTag(g.tags, tagId))
+    const target = group ? findTag(group.tags, tagId) : null
     if (!target) {
       return { root: null, statsText: '未找到该标签' }
     }
@@ -77,13 +76,8 @@ export async function loadTagGraph(opts = {}) {
       type: 'root',
       color: target.color || '#909399',
       title: target.name,
-      children: (target.children || []).map(mapTag),
-      expandable: true,
-      expanded: false,
-      loadChildren: async () => {
-        const files = (await getFilesByTagWithDetails(target.id, opts.serverId, false)) || []
-        return files.map(makeFileNode)
-      }
+      children: (target.children || []).map((child) => mapTag(child, group)),
+      ...addMeta(target, group)
     }
     return {
       root,
@@ -106,7 +100,7 @@ export async function loadTagGraph(opts = {}) {
       type: 'branch',
       color: '#909399',
       title: `${g.name}（${(g.tags || []).length} 个顶级标签）`,
-      children: (g.tags || []).map(mapTag)
+      children: (g.tags || []).map((tag) => mapTag(tag, g))
     }))
   }
 

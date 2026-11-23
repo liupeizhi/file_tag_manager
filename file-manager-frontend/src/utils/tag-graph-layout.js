@@ -97,7 +97,10 @@ function emptyNode(node, x, y) {
     y,
     // 懒加载标记: 供组件画"可展开"角标
     expandable: node.expandable === true,
-    expanded: node.expanded === true
+    expanded: node.expanded === true,
+    // 新增子节点标记: 供组件画 "+" 并抛出 add-child
+    addable: node.addable === true,
+    add: node.add || null
   }
 }
 
