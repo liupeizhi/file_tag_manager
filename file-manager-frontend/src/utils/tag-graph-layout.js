@@ -100,7 +100,10 @@ function emptyNode(node, x, y) {
     expanded: node.expanded === true,
     // 新增子节点标记: 供组件画 "+" 并抛出 add-child
     addable: node.addable === true,
-    add: node.add || null
+    add: node.add || null,
+    // 删除标记(只有叶子节点有): 供组件画 "-" 并抛出 remove-node
+    removable: node.removable === true,
+    remove: node.remove || null
   }
 }
 

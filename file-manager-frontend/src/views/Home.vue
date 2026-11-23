@@ -65,6 +65,7 @@
       :legend-items="tagLegend"
       :loader="loadTagGraph"
       @add-child="handleAddChildTag"
+      @remove-node="handleRemoveTagNode"
     />
 
     <RelationGraphDialog
@@ -101,7 +102,7 @@ import FavoriteList from '@/components/favorite/FavoriteList.vue'
 import FilePreview from '@/components/preview/FilePreview.vue'
 import RelationGraphDialog from '@/components/graph/RelationGraphDialog.vue'
 import { loadTagGraph, loadDirectoryGraph, loadFileGraph } from '@/utils/graph-loaders'
-import { getFilesByTagWithDetails, createTag } from '@/api/tag'
+import { getFilesByTagWithDetails, createTag, deleteTag } from '@/api/tag'
 import { useServerStore } from '@/store/server'
 import { useFileStore } from '@/store/file'
 import { useHistoryStore } from '@/store/history'
@@ -187,6 +188,31 @@ async function handleAddChildTag(node) {
     tagGraphRef.value?.reload()
   } catch (e) {
     ElMessage.error('新增失败：' + (e?.message || '未知错误'))
+  }
+}
+
+/** 标签关系图: 点节点上的 "-" 删除叶子标签 */
+async function handleRemoveTagNode(node) {
+  const meta = node?.remove
+  if (!meta || meta.tagId == null) return
+
+  try {
+    await ElMessageBox.confirm(
+      `确定删除标签「${meta.tagName}」吗？已关联该标签的文件会失去这个标签。`,
+      '确认删除',
+      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+  } catch (e) {
+    return
+  }
+
+  try {
+    await deleteTag(meta.tagId)
+    ElMessage.success('已删除标签')
+    tagTreeRef.value?.loadGroups?.()
+    tagGraphRef.value?.reload()
+  } catch (e) {
+    ElMessage.error('删除失败：' + (e?.message || '未知错误'))
   }
 }
 

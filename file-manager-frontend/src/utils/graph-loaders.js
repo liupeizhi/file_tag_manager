@@ -50,16 +50,27 @@ export async function loadTagGraph(opts = {}) {
     add: { tagId: tag.id, groupId: group ? group.id : null, parentName: tag.name }
   })
 
+  /** 删除要的上下文; 只有叶子节点可删 */
+  const removeMeta = (tag, group, isLeaf) => ({
+    removable: isLeaf,
+    remove: isLeaf
+      ? { tagId: tag.id, groupId: group ? group.id : null, tagName: tag.name }
+      : null
+  })
+
   const mapTag = (tag, group) => {
     tagCount++
+    const children = (tag.children || []).map((child) => mapTag(child, group))
     return {
       id: `tag-${tag.id}`,
       label: tag.name,
       type: 'tag',
       color: tag.color || '#909399',
       title: tag.name,
-      children: (tag.children || []).map((child) => mapTag(child, group)),
-      ...addMeta(tag, group)
+      children,
+      ...addMeta(tag, group),
+      // 只允许删叶子节点, 有下级标签的节点不给删
+      ...removeMeta(tag, group, children.length === 0)
     }
   }
 
@@ -70,14 +81,16 @@ export async function loadTagGraph(opts = {}) {
     if (!target) {
       return { root: null, statsText: '未找到该标签' }
     }
+    const children = (target.children || []).map((child) => mapTag(child, group))
     const root = {
       id: `tag-${target.id}`,
       label: target.name,
       type: 'root',
       color: target.color || '#909399',
       title: target.name,
-      children: (target.children || []).map((child) => mapTag(child, group)),
-      ...addMeta(target, group)
+      children,
+      ...addMeta(target, group),
+      ...removeMeta(target, group, children.length === 0)
     }
     return {
       root,

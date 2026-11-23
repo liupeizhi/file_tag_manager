@@ -121,6 +121,18 @@
                 <path v-else d="M -3.2 0 H 3.2" />
                 <title v-if="node.addable">新增子标签</title>
               </g>
+              <!-- 叶子节点: 右侧再挂一个减号用于删除 -->
+              <g
+                v-if="node.removable"
+                class="node-remover"
+                :transform="`translate(${node.width / 2 + 9}, ${node.height / 2})`"
+                @mousedown.stop
+                @click.stop="emit('remove-node', node)"
+              >
+                <circle r="7" />
+                <path d="M -3.2 0 H 3.2" />
+                <title>删除标签</title>
+              </g>
               <title>{{ node.title }}</title>
             </g>
           </g>
@@ -153,7 +165,7 @@ import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
 import { computeLayout, buildLinkPath, LAYOUTS } from '@/utils/tag-graph-layout'
 import { springBack } from '@/utils/graph-prefs'
 
-const emit = defineEmits(['add-child'])
+const emit = defineEmits(['add-child', 'remove-node'])
 
 const props = defineProps({
   title: { type: String, default: '关系图' },
@@ -670,6 +682,32 @@ defineExpose({ open, reload })
 
 .node-expander.expanded path {
   opacity: 0.45;
+}
+
+/* 删除按钮: 用危险色, 和"+ 新增"区分开 */
+.node-remover {
+  cursor: pointer;
+}
+
+.node-remover circle {
+  fill: var(--bg-card);
+  stroke: #f56c6c;
+  stroke-width: 1;
+  transition: fill 0.12s;
+}
+
+.node-remover path {
+  stroke: #f56c6c;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.node-remover:hover circle {
+  fill: #f56c6c;
+}
+
+.node-remover:hover path {
+  stroke: var(--bg-card);
 }
 
 .node-label {
