@@ -96,7 +96,7 @@
               />
               <text
                 class="node-label"
-                x="0"
+                :x="node.labelX || 0"
                 :y="node.height / 2"
                 text-anchor="middle"
                 dominant-baseline="central"
@@ -112,7 +112,7 @@
                 v-if="node.addable || node.expandable"
                 class="node-expander"
                 :class="{ expanded: node.expanded, adder: node.addable }"
-                :transform="`translate(${node.width / 2 - 9}, ${node.height / 2})`"
+                :transform="`translate(${node.width / 2 - (node.removable ? 25 : 9)}, ${node.height / 2})`"
                 @mousedown.stop
                 @click.stop="handleBadgeClick(node)"
               >
@@ -125,7 +125,7 @@
               <g
                 v-if="node.removable"
                 class="node-remover"
-                :transform="`translate(${node.width / 2 + 9}, ${node.height / 2})`"
+                :transform="`translate(${node.width / 2 - 9}, ${node.height / 2})`"
                 @mousedown.stop
                 @click.stop="emit('remove-node', node)"
               >

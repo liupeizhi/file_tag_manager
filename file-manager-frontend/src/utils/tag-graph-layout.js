@@ -31,6 +31,9 @@ const V_GAP = 64        // 树形层级间距
 const RADIUS_STEP = 142 // 雪花型每层最小半径
 const MIN_ARC = 140      // 同层每个节点需要的最小弧长(约等于盒子宽度+间距)
 
+/** 每个角标(+/-)在盒子内部占的横向空间 */
+const BADGE_SIZE = 16
+
 /** 节点盒子的宽度上限 —— 文件名再长也不让它无限撑开 */
 const MAX_NODE_WIDTH = 200
 const LABEL_FONT_SIZE = 12
@@ -62,6 +65,16 @@ function fitLabel(text, maxWidth) {
   return out ? out + '…' : chars.slice(0, 1).join('') + '…'
 }
 
+/**
+ * 节点右侧要画几个角标, 以及它们占掉多少横向空间。
+ * 标签节点: + 必有, 叶子再加一个 -; 目录节点: 只有一个展开角标。
+ */
+export function badgeArea(node) {
+  if (node.removable) return BADGE_SIZE * 2
+  if (node.addable || node.expandable) return BADGE_SIZE
+  return 0
+}
+
 export function nodeWidth(node) {
   const base = node.type === 'root'
     ? ROOT_WIDTH
@@ -69,7 +82,8 @@ export function nodeWidth(node) {
       ? GROUP_WIDTH
       : NODE_WIDTH
   // 短名字保持统一样式, 长名字(常见于文件名)按文字宽度撑开, 上限封顶
-  return Math.min(Math.max(base, textWidth(node.label) + LABEL_PADDING), MAX_NODE_WIDTH)
+  const need = textWidth(node.label) + LABEL_PADDING + badgeArea(node)
+  return Math.min(Math.max(base, need), MAX_NODE_WIDTH + badgeArea(node))
 }
 
 /* ============ 通用 ============ */
@@ -84,11 +98,14 @@ function assignLeaves(node) {
 
 function emptyNode(node, x, y) {
   const width = nodeWidth(node)
+  const area = badgeArea(node)
   return {
     id: node.id,
     type: node.type,
     // 盒子宽度定了才知道能放多少字, 超出部分截断
-    label: fitLabel(node.label, width - LABEL_PADDING),
+    label: fitLabel(node.label, width - LABEL_PADDING - area),
+    // 右侧要给角标留位置, 文字往左挪半个角标区, 保持"在剩余区域居中"
+    labelX: -area / 2,
     color: node.color,
     title: node.title,
     width,
