@@ -101,7 +101,9 @@ public class DuplicateScanService {
         request.setRightPath(rightPath);
 
         if (request.getLeftServerId().equals(request.getRightServerId())) {
-            if (leftPath.equals(rightPath)) {
+            // 同一台服务器上路径不区分大小写(macOS / Windows 的常见情况),
+            // 所以 "/Photos" 和 "/photos" 必须当成同一个目录
+            if (leftPath.equalsIgnoreCase(rightPath)) {
                 throw new IllegalArgumentException("左右两侧是同一个目录，无法比较");
             }
             if (isUnder(leftPath, rightPath) || isUnder(rightPath, leftPath)) {
@@ -582,13 +584,17 @@ public class DuplicateScanService {
         if (path == null || path.isBlank()) return "/";
         String s = path.trim().replace('\\', '/');
         if (!s.startsWith("/")) s = "/" + s;
+        // 合并重复斜杠: "//a" 与 "/a" 是同一个目录
+        s = s.replaceAll("/{2,}", "/");
         while (s.length() > 1 && s.endsWith("/")) s = s.substring(0, s.length() - 1);
-        return s;
+        return nfc(s);
     }
 
     private static boolean isUnder(String parent, String child) {
-        if ("/".equals(parent)) return !"/".equals(child);
-        return child.startsWith(parent + "/");
+        String p = parent.toLowerCase(java.util.Locale.ROOT);
+        String c = child.toLowerCase(java.util.Locale.ROOT);
+        if ("/".equals(p)) return !"/".equals(c);
+        return c.startsWith(p + "/");
     }
 
     private static String relativePath(String root, String path) {

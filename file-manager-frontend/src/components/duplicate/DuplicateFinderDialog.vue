@@ -59,10 +59,23 @@
 
         <div class="opt-right">
           <el-button v-if="running" @click="cancel">取消比较</el-button>
-          <el-button type="primary" :loading="starting" :disabled="running" @click="start">
-            开始比较
-          </el-button>
+          <el-tooltip :disabled="!sameTarget" content="左右两侧是同一个目录" placement="top">
+            <span>
+              <el-button
+                type="primary"
+                :loading="starting"
+                :disabled="running || sameTarget || !left.path || !right.path"
+                @click="start"
+              >
+                开始比较
+              </el-button>
+            </span>
+          </el-tooltip>
         </div>
+      </div>
+
+      <div v-if="sameTarget" class="pick-warning">
+        左右两侧是同一台服务器的同一个目录（路径不区分大小写），请换一个目录。
       </div>
 
       <!-- 进度 -->
@@ -244,6 +257,25 @@ let timer = null
 
 const running = computed(() => task.value?.status === 'RUNNING')
 
+/** 与后端一致: 合并重复斜杠、去掉末尾斜杠; 同一台服务器的路径不区分大小写 */
+function normalizePath(path) {
+  if (path == null) return ''
+  let s = String(path).trim().replace(/\\/g, '/')
+  if (!s) return ''
+  if (!s.startsWith('/')) s = '/' + s
+  s = s.replace(/\/{2,}/g, '/')
+  while (s.length > 1 && s.endsWith('/')) s = s.slice(0, -1)
+  return s
+}
+
+const sameTarget = computed(() => {
+  const l = normalizePath(left.path)
+  const r = normalizePath(right.path)
+  if (!l || !r) return false
+  if (left.serverId == null || left.serverId !== right.serverId) return false
+  return l.toLowerCase() === r.toLowerCase()
+})
+
 
 const progressStatus = computed(() => {
   const s = task.value?.status
@@ -272,7 +304,8 @@ function open(options = {}) {
   left.serverId = serverId
   right.serverId = serverId
   left.path = options.path || '/'
-  right.path = '/'
+  // 左侧就在根目录时, 右侧默认留空 —— 否则两边会是同一个目录
+  right.path = (options.path || '/') === '/' ? '' : '/'
   // 每次打开都重置筛选, 免得上次的状态让人以为结果不对
   filters.minSizeMb = 0
   filters.verified = 'all'
@@ -586,6 +619,15 @@ defineExpose({ open })
 }
 
 /* 选项 */
+.pick-warning {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #e6a23c;
+  border: 1px solid rgba(230, 162, 60, 0.35);
+  border-radius: var(--radius-control);
+  background: rgba(230, 162, 60, 0.08);
+}
+
 .option-row {
   display: flex;
   align-items: center;
