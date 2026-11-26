@@ -312,6 +312,16 @@ public class FileService {
                 .collect(Collectors.toList());
     }
     
+    /**
+     * 列出目录下一层的原始资源(不过滤、不组装 DTO)。
+     * 供批量扫描类功能(如重复文件检测)自己掌控遍历与预算。
+     */
+    public List<FileResource> listResources(Long serverId, String path) {
+        ServerConfig server = getServer(serverId);
+        FileProtocolService service = getProtocolService(server);
+        return service.listFiles(server, path != null ? path : "/");
+    }
+
     private void updateMetadataFromResource(FileMetadata metadata, FileResource resource) {
         metadata.setName(resource.getName());
         metadata.setIsDirectory(resource.isDirectory());
