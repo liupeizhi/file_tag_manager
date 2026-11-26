@@ -47,6 +47,12 @@
         </el-button>
       </el-tooltip>
 
+      <el-tooltip content="重复文件检测" placement="bottom">
+        <el-button circle class="icon-button duplicate-button" @click="emit('open-duplicate')">
+          <el-icon :size="16"><CopyDocument /></el-icon>
+        </el-button>
+      </el-tooltip>
+
       <el-tooltip content="主题设置" placement="bottom">
         <el-button circle class="icon-button" @click="router.push('/theme')">
           <el-icon :size="16"><Brush /></el-icon>
@@ -104,10 +110,10 @@ import { useRouter } from 'vue-router'
 import { useServerStore } from '@/store/server'
 import { useUserStore } from '@/store/user'
 import { useFileStore } from '@/store/file'
-import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown, Switch, Brush, Connection } from '@element-plus/icons-vue'
+import { Monitor, Setting, FolderOpened, User, SwitchButton, ArrowDown, Switch, Brush, Connection, CopyDocument } from '@element-plus/icons-vue'
 import ThemeSwitcher from '@/components/common/ThemeSwitcher.vue'
 
-const emit = defineEmits(['open-tag-graph', 'open-dir-graph'])
+const emit = defineEmits(['open-tag-graph', 'open-dir-graph', 'open-duplicate'])
 
 const router = useRouter()
 const serverStore = useServerStore()

@@ -3,6 +3,7 @@
     <AppHeader
       @open-tag-graph="openTagGraph"
       @open-dir-graph="openServerDirGraph"
+      @open-duplicate="openDuplicateFinder"
     />
     <div class="main-content">
       <div class="sidebar-wrapper" :style="{ width: isSidebarCollapsed ? '0px' : sidebarWidth + 'px' }">
@@ -79,6 +80,8 @@
       @preview-file="handleGraphPreview"
     />
 
+    <DuplicateFinderDialog ref="duplicateDialogRef" />
+
     <RelationGraphDialog
       ref="fileGraphRef"
       title="文件关系图"
@@ -103,6 +106,7 @@ import HistoryList from '@/components/history/HistoryList.vue'
 import FavoriteList from '@/components/favorite/FavoriteList.vue'
 import FilePreview from '@/components/preview/FilePreview.vue'
 import RelationGraphDialog from '@/components/graph/RelationGraphDialog.vue'
+import DuplicateFinderDialog from '@/components/duplicate/DuplicateFinderDialog.vue'
 import { loadTagGraph, loadDirectoryGraph, loadFileGraph } from '@/utils/graph-loaders'
 import { getFilesByTagWithDetails, createTag, deleteTag } from '@/api/tag'
 import { useServerStore } from '@/store/server'
@@ -128,6 +132,7 @@ const fileListRef = ref(null)
 const tagGraphRef = ref(null)
 const dirGraphRef = ref(null)
 const fileGraphRef = ref(null)
+const duplicateDialogRef = ref(null)
 
 const tagLegend = [
   { label: '标签组', dotClass: 'dot-group' },
@@ -141,6 +146,14 @@ const fileLegend = [
   { label: '目录', dotClass: 'dot-group' },
   { label: '标签', dotClass: 'dot-tag' }
 ]
+
+/** 顶栏: 重复文件检测 */
+function openDuplicateFinder() {
+  duplicateDialogRef.value?.open({
+    serverId: serverStore.currentServer?.id,
+    path: fileStore.currentPath || '/'
+  })
+}
 
 /** 顶栏: 标签关系图 */
 function openTagGraph() {
