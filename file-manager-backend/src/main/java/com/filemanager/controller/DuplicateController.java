@@ -50,12 +50,12 @@ public class DuplicateController {
             @PathVariable String taskId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Boolean crossOnly,
+            @RequestParam(required = false) String scope,
             @RequestParam(required = false) Long minSize,
             @RequestParam(required = false) String verified) {
         try {
             return ApiResponse.success(
-                    duplicateScanService.listGroups(taskId, page, size, crossOnly, minSize, verified));
+                    duplicateScanService.listGroups(taskId, page, size, scope, minSize, verified));
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(404, e.getMessage());
         }

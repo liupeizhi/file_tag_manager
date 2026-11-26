@@ -105,7 +105,10 @@
             <b>{{ formatFileSize(task.summary.reclaimableBytes) }}</b><span>可回收（潜力值）</span>
           </div>
           <div class="sum-item">
-            <b>{{ task.summary.crossGroupCount }}</b><span>跨边重复</span>
+            <b>{{ task.summary.crossGroupCount }}</b><span>两边之间</span>
+          </div>
+          <div class="sum-item">
+            <b>{{ task.summary.sameSideGroupCount }}</b><span>各自内部</span>
           </div>
           <div class="sum-item">
             <b>{{ task.summary.verifiedGroupCount }}</b><span>已确认</span>
@@ -116,7 +119,11 @@
         </div>
 
         <div class="filter-row">
-          <el-checkbox v-model="filters.crossOnly" @change="applyFilters">只看跨边</el-checkbox>
+          <el-radio-group v-model="filters.scope" size="small" @change="applyFilters">
+            <el-radio-button value="all">全部</el-radio-button>
+            <el-radio-button value="cross">两边之间</el-radio-button>
+            <el-radio-button value="same">各自内部</el-radio-button>
+          </el-radio-group>
           <span class="opt-label">最小</span>
           <el-input-number
             v-model="filters.minSizeMb"
@@ -135,16 +142,16 @@
           <span class="filter-count">共 {{ groupTotal }} 组</span>
         </div>
 
-        <el-empty v-if="!groupTotal" description="没有发现重复文件" />
+        <div v-if="hintText" class="result-hint">{{ hintText }}</div>
+
+        <el-empty v-if="!groupTotal" :description="emptyText" />
 
         <div v-else class="group-list">
           <div v-for="g in groups" :key="g.id" class="dup-group">
             <div class="group-head">
               <span class="g-title">{{ g.members.length }} 个副本 · {{ formatFileSize(g.size) }}</span>
+              <span class="loc-chip" :class="locationOf(g).cls">{{ locationOf(g).text }}</span>
               <span class="g-sample" :title="g.members[0]?.path">{{ g.members[0]?.relativePath }}</span>
-              <el-tag size="small" :type="g.cross ? 'warning' : 'info'" effect="plain">
-                {{ g.cross ? '跨边' : '同边' }}
-              </el-tag>
               <el-tag v-if="g.verified" size="small" type="success" effect="plain">已确认</el-tag>
               <span class="g-reclaim">可回收 {{ formatFileSize(g.reclaimableBytes) }}</span>
               <div class="g-actions">
@@ -241,13 +248,40 @@ const groups = ref([])
 const groupTotal = ref(0)
 const page = ref(0)
 const pageSize = 20
-const filters = reactive({ crossOnly: false, minSizeMb: 0, verified: 'all' })
+const filters = reactive({ scope: 'all', minSizeMb: 0, verified: 'all' })
 const expanded = reactive({})
 const verifyingId = ref('')
 
 let timer = null
 
 const running = computed(() => task.value?.status === 'RUNNING')
+
+/** 一组是「跨两边」还是「某一边内部」 */
+function locationOf(group) {
+  if (group.cross) return { text: '跨左右', cls: 'cross' }
+  const sides = new Set((group.members || []).map((m) => m.side))
+  if (sides.size === 1 && sides.has('LEFT')) return { text: '左侧内部', cls: 'left' }
+  if (sides.size === 1 && sides.has('RIGHT')) return { text: '右侧内部', cls: 'right' }
+  return { text: '同边', cls: 'left' }
+}
+
+/** 两边之间没有重复、但各自内部有重复时，明确说出来 */
+const hintText = computed(() => {
+  const s = task.value?.summary
+  if (!s || task.value?.status !== 'DONE') return ''
+  if (filters.scope !== 'all') return ''
+  if (s.groupCount > 0 && s.crossGroupCount === 0) {
+    return '两个目录之间没有相同的文件；下面这些是各自目录内部的重复。'
+  }
+  if (s.crossGroupCount === 0) return ''
+  return ''
+})
+
+const emptyText = computed(() => {
+  if (filters.scope === 'cross') return '两个目录之间没有相同的文件'
+  if (filters.scope === 'same') return '两边各自目录内部都没有重复文件'
+  return '没有发现重复文件'
+})
 const progressStatus = computed(() => {
   const s = task.value?.status
   if (s === 'DONE') return 'success'
@@ -276,6 +310,10 @@ function open(options = {}) {
   right.serverId = serverId
   left.path = options.path || '/'
   right.path = '/'
+  // 每次打开都回到"全部", 免得上次的筛选状态让人以为结果不对
+  filters.scope = 'all'
+  filters.minSizeMb = 0
+  filters.verified = 'all'
   resetResult()
   visible.value = true
 }
@@ -392,7 +430,7 @@ async function loadGroups() {
     const res = await getDuplicateGroups(task.value.id, {
       page: page.value,
       size: pageSize,
-      crossOnly: filters.crossOnly || undefined,
+      scope: filters.scope === 'all' ? undefined : filters.scope,
       minSize: filters.minSizeMb > 0 ? Math.round(filters.minSizeMb * 1024 * 1024) : undefined,
       verified: filters.verified === 'all' ? undefined : filters.verified
     })
@@ -730,6 +768,42 @@ defineExpose({ open })
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.loc-chip {
+  flex-shrink: 0;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+.loc-chip.cross {
+  color: #e6a23c;
+  border-color: rgba(230, 162, 60, 0.4);
+  background: rgba(230, 162, 60, 0.12);
+}
+
+.loc-chip.left {
+  color: #409eff;
+  border-color: rgba(64, 158, 255, 0.4);
+  background: rgba(64, 158, 255, 0.12);
+}
+
+.loc-chip.right {
+  color: #67c23a;
+  border-color: rgba(103, 194, 58, 0.4);
+  background: rgba(103, 194, 58, 0.12);
+}
+
+.result-hint {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-control);
+  background: var(--bg-secondary);
 }
 
 .g-sample {

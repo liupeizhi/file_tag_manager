@@ -129,13 +129,20 @@ public class DuplicateScanService {
         return toDTO(requireTask(taskId));
     }
 
+    /**
+     * @param scope all: 全部; cross: 仅左右之间; same: 仅单边目录内部
+     */
     public DuplicateGroupPageDTO listGroups(String taskId, int page, int size,
-                                            Boolean crossOnly, Long minSize, String verified) {
+                                            String scope, Long minSize, String verified) {
         DuplicateTask task = requireTask(taskId);
         List<DuplicateGroupDTO> all = task.groups;
 
         List<DuplicateGroupDTO> filtered = all.stream()
-                .filter(g -> crossOnly == null || !crossOnly || Boolean.TRUE.equals(g.getCross()))
+                .filter(g -> {
+                    if ("cross".equalsIgnoreCase(scope)) return Boolean.TRUE.equals(g.getCross());
+                    if ("same".equalsIgnoreCase(scope)) return !Boolean.TRUE.equals(g.getCross());
+                    return true;
+                })
                 .filter(g -> minSize == null || minSize <= 0 || g.getSize() >= minSize)
                 .filter(g -> {
                     if ("yes".equalsIgnoreCase(verified)) return Boolean.TRUE.equals(g.getVerified());
