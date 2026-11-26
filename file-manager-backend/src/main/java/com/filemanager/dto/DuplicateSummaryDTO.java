@@ -13,12 +13,6 @@ public class DuplicateSummaryDTO {
     /** 潜在可回收空间(字节) */
     private Long reclaimableBytes;
 
-    /** 左右两边都有成员的组数 */
-    private Integer crossGroupCount;
-
-    /** 只有单边成员的组数 */
-    private Integer sameSideGroupCount;
-
     /** 已复核确认的组数 */
     private Integer verifiedGroupCount;
 

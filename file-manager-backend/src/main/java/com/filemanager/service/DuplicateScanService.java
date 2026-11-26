@@ -129,20 +129,12 @@ public class DuplicateScanService {
         return toDTO(requireTask(taskId));
     }
 
-    /**
-     * @param scope all: 全部; cross: 仅左右之间; same: 仅单边目录内部
-     */
     public DuplicateGroupPageDTO listGroups(String taskId, int page, int size,
-                                            String scope, Long minSize, String verified) {
+                                            Long minSize, String verified) {
         DuplicateTask task = requireTask(taskId);
         List<DuplicateGroupDTO> all = task.groups;
 
         List<DuplicateGroupDTO> filtered = all.stream()
-                .filter(g -> {
-                    if ("cross".equalsIgnoreCase(scope)) return Boolean.TRUE.equals(g.getCross());
-                    if ("same".equalsIgnoreCase(scope)) return !Boolean.TRUE.equals(g.getCross());
-                    return true;
-                })
                 .filter(g -> minSize == null || minSize <= 0 || g.getSize() >= minSize)
                 .filter(g -> {
                     if ("yes".equalsIgnoreCase(verified)) return Boolean.TRUE.equals(g.getVerified());
@@ -269,7 +261,7 @@ public class DuplicateScanService {
             List<DuplicateGroupDTO> groups = buildGroups(candidates);
             task.groups = groups;
             task.summary = summarize(task, groups);
-            finish(task, "DONE", groups.isEmpty() ? "没有发现重复文件" : "");
+            finish(task, "DONE", groups.isEmpty() ? "两个目录之间没有相同的文件" : "");
         } catch (Exception e) {
             log.warn("重复文件检测失败: {}", e.getMessage());
             task.status = "FAILED";
@@ -353,7 +345,11 @@ public class DuplicateScanService {
         return items;
     }
 
-    /** 按大小分桶，只保留可能重复的候选 */
+    /**
+     * 按大小分桶, 只保留「左右两边都有」的桶。
+     * 只比较两边之间, 单边目录内部的重复不参与判断 —— 这样候选数更少,
+     * 也不会把"自己盘里下重了"报成两边的重复。
+     */
     private List<Item> pickCandidates(List<Item> left, List<Item> right) {
         Map<Long, List<Item>> buckets = new HashMap<>();
         for (Item item : left) buckets.computeIfAbsent(item.size, k -> new ArrayList<>()).add(item);
@@ -361,7 +357,9 @@ public class DuplicateScanService {
 
         List<Item> candidates = new ArrayList<>();
         for (List<Item> bucket : buckets.values()) {
-            if (bucket.size() >= 2) candidates.addAll(bucket);
+            boolean hasLeft = bucket.stream().anyMatch(i -> "LEFT".equals(i.side));
+            boolean hasRight = bucket.stream().anyMatch(i -> "RIGHT".equals(i.side));
+            if (hasLeft && hasRight) candidates.addAll(bucket);
         }
         // 大文件先算：用户更关心大文件能省多少空间
         candidates.sort(Comparator.comparingLong((Item i) -> i.size).reversed());
@@ -465,6 +463,10 @@ public class DuplicateScanService {
         for (Map.Entry<String, List<Item>> entry : byFingerprint.entrySet()) {
             List<Item> members = entry.getValue();
             if (members.size() < 2) continue;
+            // 同一个桶里也可能出现"左边两份相同、右边那份不同"，这种不算跨边重复
+            boolean crosses = members.stream().anyMatch(i -> "LEFT".equals(i.side))
+                    && members.stream().anyMatch(i -> "RIGHT".equals(i.side));
+            if (!crosses) continue;
 
             // 左边排前面，便于「以左为准」阅读
             members.sort(Comparator
@@ -476,8 +478,7 @@ public class DuplicateScanService {
             long size = members.get(0).size;
             group.setSize(size);
             group.setReclaimableBytes(size * (members.size() - 1L));
-            group.setCross(members.stream().anyMatch(i -> "LEFT".equals(i.side))
-                    && members.stream().anyMatch(i -> "RIGHT".equals(i.side)));
+            group.setCross(true);
             group.setVerified(false);
             group.setMismatch(false);
             group.setMembers(members.stream().map(this::toMember).collect(Collectors.toList()));
@@ -504,19 +505,15 @@ public class DuplicateScanService {
         DuplicateSummaryDTO summary = new DuplicateSummaryDTO();
         int files = 0;
         long reclaimable = 0;
-        int cross = 0;
         int verified = 0;
         for (DuplicateGroupDTO g : groups) {
             files += g.getMembers().size();
             reclaimable += g.getReclaimableBytes();
-            if (Boolean.TRUE.equals(g.getCross())) cross++;
             if (Boolean.TRUE.equals(g.getVerified())) verified++;
         }
         summary.setGroupCount(groups.size());
         summary.setFileCount(files);
         summary.setReclaimableBytes(reclaimable);
-        summary.setCrossGroupCount(cross);
-        summary.setSameSideGroupCount(groups.size() - cross);
         summary.setVerifiedGroupCount(verified);
         summary.setLeftFiles(task.scannedLeft.longValue());
         summary.setRightFiles(task.scannedRight.longValue());
