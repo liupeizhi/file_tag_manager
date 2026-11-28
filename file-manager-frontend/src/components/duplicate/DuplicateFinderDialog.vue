@@ -16,7 +16,12 @@
             左侧目录
             <span class="pick-tag">基准</span>
           </div>
-          <el-select v-model="left.serverId" placeholder="选择服务器" class="server-select">
+          <el-select
+            v-model="left.serverId"
+            placeholder="选择服务器"
+            class="server-select"
+            @change="handleServerChange('left')"
+          >
             <el-option v-for="s in serverStore.servers" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
           <div class="path-line">
@@ -29,7 +34,12 @@
 
         <div class="pick-card">
           <div class="pick-title">右侧目录</div>
-          <el-select v-model="right.serverId" placeholder="选择服务器" class="server-select">
+          <el-select
+            v-model="right.serverId"
+            placeholder="选择服务器"
+            class="server-select"
+            @change="handleServerChange('right')"
+          >
             <el-option v-for="s in serverStore.servers" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
           <div class="path-line">
@@ -196,6 +206,7 @@
     <div class="picker-server">{{ pickerServerName }}</div>
     <el-tree
       ref="pickerTreeRef"
+      :key="pickerKey"
       lazy
       :load="loadPickerNode"
       :props="treeProps"
@@ -507,6 +518,8 @@ async function exportCsv() {
 
 const pickerVisible = ref(false)
 const pickerSide = ref('left')
+/** 目录树有懒加载缓存, 换服务器/重新打开时靠换 key 强制重建 */
+const pickerKey = ref(0)
 const pickerTarget = ref(null)
 const pickerTreeRef = ref(null)
 const treeProps = { label: 'name', isLeaf: () => false }
@@ -524,7 +537,26 @@ function openPicker(side) {
   }
   pickerSide.value = side
   pickerTarget.value = { path: '/' }
+  // 每次打开都重建目录树, 避免看到上一次(甚至另一台服务器)的缓存节点
+  pickerKey.value++
   pickerVisible.value = true
+}
+
+/**
+ * 切换服务器: 目录属于旧服务器, 必须重置。
+ * 同时清掉旧结果 —— 它们对应的是上一对服务器/目录。
+ */
+function handleServerChange(side) {
+  if (task.value?.status === 'RUNNING' && task.value?.id) {
+    cancelDuplicateTask(task.value.id).catch(() => {})
+  }
+  const target = side === 'left' ? left : right
+  target.path = '/'
+  resetResult()
+  pickerKey.value++
+  if (pickerVisible.value && pickerSide.value === side) {
+    pickerVisible.value = false
+  }
 }
 
 async function loadPickerNode(node, resolve) {
